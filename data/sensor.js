@@ -49,9 +49,15 @@ $(function() {
   }
 
   function updateTank(json) {
-    $("#tanktext").text(json.info["percent full"] + "%");
-		$("#tanktextVol").html(json.info["volume"].toFixed(2) + "m<sup>3</sup>");
-    $("div.progress-fill").css("height", json.info["percent full"] + "%");
+    if (json.info["current distance"] == 0) {
+      $("#tanktext").text("SENSOR");
+      $("#tanktextVol").text("NO RANGE");
+      $("div.progress-fill").css("height", 0 + "%");
+    } else {
+      $("#tanktext").text(json.info["percent full"] + "%");
+  		$("#tanktextVol").html(json.info["volume"].toFixed(2) + "m<sup>3</sup>");
+      $("div.progress-fill").css("height", json.info["percent full"] + "%");
+    }
   }
 
   function updateHistory(json) {

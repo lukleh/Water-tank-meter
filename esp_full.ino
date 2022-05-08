@@ -96,7 +96,7 @@ int calculateTimeDiff(int current, int tstep) {
   }
 }
 
-unsigned long measureDistance() {
+unsigned long rawDistance() {
   int distance_cm;
   digitalWrite(ULTRASOUND_TRIGPIN, LOW); // Set the trigger pin to low for 2uS
   delayMicroseconds(2);
@@ -105,6 +105,28 @@ unsigned long measureDistance() {
   digitalWrite(ULTRASOUND_TRIGPIN, LOW); // Send pin low again
   distance_cm = pulseIn(ULTRASOUND_ECHOPIN, HIGH, 26000)/58; // Read in times pulse
   return distance_cm;
+}
+
+
+int measureDistance() {
+  int raw_sum = 0;
+  int raw_best = 0;
+  int raw[5] = {}; 
+  for (int i = 0; i < 5; i++) {
+    raw[i] = rawDistance();
+    raw_sum += raw[i];
+//    Serial.print(String(raw[i]) + ",");
+    delay(100);
+  }
+  raw_best = raw[0];
+  for (int i = 0; i < 5; i++) {
+    if (abs(raw_best - (raw_sum / 6.0)) > abs(raw[i] - (raw_sum / 6.0))) {
+      raw_best = raw[i];
+    }
+  }
+//  Serial.println();
+//  Serial.println(raw_best);
+  return raw_best;
 }
 
 
