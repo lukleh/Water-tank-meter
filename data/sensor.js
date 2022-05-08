@@ -66,6 +66,9 @@ $(function() {
     for (var key in json.info) {
       $("#infoTable").append(`<tr><td>${key}</td><td>${json.info[key]}</td></tr>`);
     }
+    rssi = json.info["signal strength dBi"]
+    rssi_percent = Math.min(Math.max(2 * (rssi + 100), 0), 100)
+    $("#wifistrength").css("width", rssi_percent + "%").attr("aria-valuenow", rssi_percent).text("WIFI " + rssi_percent + "%");
   }
 
   function refreshData() {

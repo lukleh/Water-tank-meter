@@ -22,7 +22,6 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 AsyncWebServer server(80);
 
-//const String CONFIG_PATH = "/config_v5.json";
 unsigned long current_distance_cm = 0;
 float last_average_distance_cm = 0;
 float average_distance_cm = 0;
@@ -40,7 +39,7 @@ bool should_reconnect = false;
 int current_hour = 0;
 int lastWificheck = 0;
 int nowtime = timeClient.getEpochTime();
-
+long rssi = 0;
 
 void calc_average_distance() {
   if (average_distance_cm == 0) {
@@ -128,6 +127,7 @@ void handleData(AsyncWebServerRequest *request){
   info["loop number"] = loop_count;
   info["wifi name"] = wifi_ssid;
   info["wifi password"] = wifi_password;
+  info["signal strength dBi"] = rssi;
  
   JsonArray data = jDoc.createNestedArray("data");
   for(int i = current_hour; i > -1; i--) {
@@ -184,11 +184,7 @@ void loadConfig() {
   EepromStream eepromStream(0, 256);
   deserializeJson(doc, eepromStream);
   if (doc != NULL) {
-//  if (LittleFS.exists(CONFIG_PATH)) {
     Serial.println("found config file");
-//    File file = LittleFS.open(CONFIG_PATH, "r");
-//    deserializeJson(doc, file);
-//    file.close();
     wifi_ssid = String(doc["wifi ssid"]) ? String(doc["wifi ssid"]) : "";
     wifi_password = String(doc["wifi password"]) ? String(doc["wifi password"]) : "";
     sensor_height_cm = doc["sensor height cm"] ? doc["sensor height cm"] : 0;
@@ -207,26 +203,20 @@ void loadConfig() {
 }
 
 void saveConfig() {
-//  if (LittleFS.exists(CONFIG_PATH)) {
-//    LittleFS.remove(CONFIG_PATH);
-//  }
   StaticJsonDocument<256> doc;
   doc["wifi ssid"] = wifi_ssid;
   doc["wifi password"] = wifi_password;
   doc["sensor height cm"] = sensor_height_cm;
   doc["tank diameter cm"] = tank_diameter_cm;
   doc["connection success"] = connection_success;
-//  File file = LittleFS.open(CONFIG_PATH, "w");
   Serial.println("save config:");
   serializeJson(doc, Serial);
   Serial.println();
   Serial.println("saving to EEPROM");
-//  serializeJson(doc, file);
   EepromStream eepromStream(0, 256);
   serializeJson(doc, eepromStream);
   eepromStream.flush(); 
   Serial.println("config saved");
-//  file.close();
 }
 
 void makeSoftAP() {
@@ -358,7 +348,7 @@ void loop()
   current_hour = timeStep();
   nowtime = timeClient.getEpochTime();
   checkWifi();
-  
+  rssi = WiFi.RSSI();
   current_distance_cm = measureDistance(); 
   calc_average_distance();
   if (round(last_average_distance_cm) != round(average_distance_cm)) {
