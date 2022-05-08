@@ -1,0 +1,43 @@
+.vertical .progress-bar {
+  height: 400px;
+  width: 100%;
+  display: inline-block;
+  font-size: 500%;
+  text-align: center;
+}
+
+.progress-bar .progress-track {
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  border: 5px solid #B8860B;
+  position: relative;
+}
+
+.vertical .progress-fill {
+    width: 100%;
+    color: #fff;
+    text-align: center;
+    position: absolute;
+    z-index: 0;
+    bottom: 0;
+    background: rgb(100, 149, 237);
+}
+
+.vertical #tanktext {
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    width: inherit;
+    left: 0;
+    transform: translateY(-90%);
+}
+
+.vertical #tanktextVol {
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    width: inherit;
+    left: 0;
+    transform: translateY(-20%);
+}

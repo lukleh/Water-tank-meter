@@ -1,34 +1,46 @@
+#define DYNAMIC_JSON_DOCUMENT_SIZE 16384
 #include <NTPClient.h>
 #include <ESP8266WiFi.h>
-#include <WiFiClient.h>
-#include <ESP8266WebServer.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <TimeLib.h>
+#include "AsyncJson.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
-#include <WiFiUdp.h>
-#include <ArduinoOTA.h>
+#include <StreamUtils.h>
+#include <AsyncElegantOTA.h>
+#include <EEPROM.h>
+#include <StreamUtils.h>
 
 #define ULTRASOUND_ECHOPIN D6// Pin to receive echo pulse
 #define ULTRASOUND_TRIGPIN D7// Pin to send trigger pulse
 #define MEASUREMENT_COUNT 168
 
-int sensor_height_cm = 0;
-const String CONFIG_PATH = "/config_v3.json";
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
+AsyncWebServer server(80);
+
+//const String CONFIG_PATH = "/config_v5.json";
 unsigned long current_distance_cm = 0;
-float average_distance_cm = 0;
 float last_average_distance_cm = 0;
-unsigned long tank_diameter_cm = 0;
+float average_distance_cm = 0;
 byte measurements[MEASUREMENT_COUNT] = {}; 
 unsigned long loop_count = 0;
 const char *myname   = "watertankmeter";
+
 String wifi_ssid = "";
 String wifi_password = "";
+int sensor_height_cm = 0;
+unsigned long tank_diameter_cm = 0;
+bool connection_success = false;
+bool should_reconnect = false;
 
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP);
-ESP8266WebServer server(80);
+int current_hour = 0;
+int lastWificheck = 0;
+int nowtime = timeClient.getEpochTime();
+
 
 void calc_average_distance() {
   if (average_distance_cm == 0) {
@@ -43,22 +55,24 @@ int timeStep() {
 }
 
 int remainingDepth(int distance_cm) {
+  if (sensor_height_cm == 0) {
+    return 0;
+  }
   return sensor_height_cm - distance_cm;
 }
 
+int calcPercentFull(int distance_cm) {
+  if (sensor_height_cm == 0) {
+    return 0;
+  }
+  return (remainingDepth(distance_cm) / (sensor_height_cm - 20.0)) * 100;
+}
+
 float waterVolumeM3(int distance_cm) {
-  if (distance_cm == 0) {
+  if (distance_cm == 0 || sensor_height_cm == 0 || tank_diameter_cm == 0) {
     return 0;
   }
   return 3.14 * (tank_diameter_cm/2.0) * (tank_diameter_cm/2.0) * remainingDepth(distance_cm) / (100 * 100 * 100);
-}
-
-String waterVolumeSanitizedM3(int distance_cm) {
-  float val = waterVolumeM3(distance_cm);
-  if (val != 0) {
-    return String(val) + "m<sup>3</sup>";
-  }
-  return "no value";
 }
 
 String prependDigits(int digits) {
@@ -95,183 +109,124 @@ unsigned long measureDistance() {
 }
 
 
-// prepare a web page to be send to a client (web browser)
-String genHomePage()
-{
-  String htmlPage;
-  htmlPage.reserve(20480);               // prevent ram fragmentation
-  htmlPage = F("<!DOCTYPE HTML>"
-               "<html><head>"
-               "<style>"
-               "html {"
-                  "font-size: 200%;"
-               "}"
-               "table, th, td {"
-                  "border: 1px solid black;"
-               "}"
-               ".volumetextcolor {"
-                  "fill: black;"
-               "}"
-               "</style>"
-               "<meta http-equiv=\"refresh\" content=\"60\">"
-               "</head>"
-               "<body>");
-
-  htmlPage += "<form method=\"get\" action=\"/setup/\">\
-    <input type=\"submit\" value=\"Setup\">\
-  </form>";    
-    
-  htmlPage += "<table>";
-  htmlPage += "<tr><td>volume</td>";
-  htmlPage += "<td>" + waterVolumeSanitizedM3(average_distance_cm) + "</td></tr>";
-  htmlPage += "<tr><td>average distance</td>";
-  htmlPage += "<td>" + String(int(average_distance_cm)) + "cm</td></tr>";
-  htmlPage += "<tr><td>current distance</td>";
-  htmlPage += "<td>" + String(current_distance_cm) + "cm</td></tr>";
-  htmlPage += "<tr><td>time</td>";
-  htmlPage += "<td>" + formatTime(timeClient.getEpochTime()) + "</td></tr>";
-  htmlPage += "<tr><td>sensor height</td>";
-  htmlPage += "<td>" + String(sensor_height_cm) + "cm</td></tr>";
-  htmlPage += "<tr><td>tank diameter</td>";
-  htmlPage += "<td>" + String(tank_diameter_cm) + "cm</td></tr>";
-  htmlPage += "<tr><td>WIFI</td>";
-  htmlPage += "<td>" + ((wifi_get_opmode() == 2) ? ("AP: " + String(myname)) : ("Station: " + wifi_ssid)) + "</td></tr>";
-  htmlPage += "<tr><td>your IP</td>";
-  htmlPage += "<td>" + server.client().remoteIP().toString() + "</td></tr>";
-  htmlPage += "<tr><td>my IP</td>";
-  htmlPage += "<td>" + WiFi.localIP().toString() + "</td></tr>";
-  htmlPage += "<tr><td>timestamp</td>";
-  htmlPage += "<td>" + String(timeClient.getEpochTime()) + "</td></tr>";
-  htmlPage += "<tr><td>loop number</td>";
-  htmlPage += "<td>" + String(loop_count) + "</td></tr>";
-  htmlPage += "</table>";
-  
-  htmlPage += "<table>";
-  htmlPage += "<tr><td><b>time</b></td><td><b>volume</b></td><td><b>distance</b></td></tr>";
-  int current_hour = timeStep();
-  int nowtime = timeClient.getEpochTime();
-  
+void handleData(AsyncWebServerRequest *request){
+  AsyncJsonResponse * response = new AsyncJsonResponse();
+  response->addHeader("Server","ESP Async Web Server");
+  JsonObject jDoc = response->getRoot();
+  JsonObject info = jDoc.createNestedObject("info");
+  info["volume"] = waterVolumeM3(average_distance_cm);
+  info["percent full"] = calcPercentFull(average_distance_cm);
+  info["average distance"] = int(average_distance_cm);
+  info["current distance"] = current_distance_cm;
+  info["time"] = formatTime(timeClient.getEpochTime());
+  info["sensor height"] = sensor_height_cm;
+  info["tank diameter"] = tank_diameter_cm;
+  info["WIFI"] = ((wifi_get_opmode() == 2) ? ("AP: " + String(myname)) : ("Station: " + wifi_ssid));
+  info["your IP"] = request->client()->remoteIP().toString();
+  info["my IP"] =  WiFi.localIP().toString();
+  info["timestamp"] = timeClient.getEpochTime();
+  info["loop number"] = loop_count;
+  info["wifi name"] = wifi_ssid;
+  info["wifi password"] = wifi_password;
+ 
+  JsonArray data = jDoc.createNestedArray("data");
   for(int i = current_hour; i > -1; i--) {
-    htmlPage += "<tr><td>" + formatTime(subtractTime(nowtime, calculateTimeDiff(current_hour, i)) / 3600 * 3600) + "</td>";
-    htmlPage += "<td>" + waterVolumeSanitizedM3(measurements[i]) + "</td>";
-    htmlPage += "<td>" + ((measurements[i] == 0) ? "no value" : (String(measurements[i]) + "cm")) + "</td></tr>";
+    JsonObject measurement = data.createNestedObject();
+    measurement["time"] = formatTime(subtractTime(nowtime, calculateTimeDiff(current_hour, i)) / 3600 * 3600);
+    measurement["volume"] = waterVolumeM3(measurements[i]);
+    measurement["distance"] = measurements[i];
   }
 
   for(int i = MEASUREMENT_COUNT-1; i > current_hour; i--) {
-    htmlPage += "<tr><td>" + formatTime(subtractTime(nowtime, calculateTimeDiff(current_hour, i)) / 3600 * 3600) + "</td>";
-    htmlPage += "<td>" + waterVolumeSanitizedM3(measurements[i]) + "</td>";
-    htmlPage += "<td>" + ((measurements[i] == 0) ? "no value" : (String(measurements[i]) + "cm")) + "</td></tr>";
+    JsonObject measurement = data.createNestedObject();
+    measurement["time"] = formatTime(subtractTime(nowtime, calculateTimeDiff(current_hour, i)) / 3600 * 3600);
+    measurement["volume"] = waterVolumeM3(measurements[i]);
+    measurement["distance"] = measurements[i];
   }
-  
-  htmlPage += "</table>";
-  htmlPage += F("</body></html>"
-                "\r\n");
-  return htmlPage;
+  response->setLength();
+  request->send(response);
 }
 
-void handleRoot() {
-  server.send(200, "text/html", genHomePage());
-}
 
-void handleSetup() {
-  String htmlPage = "<form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/postform/\">\
-    <label for=\"fname\">wifi name:</label>\
-    <input type=\"text\" name=\"wifi name\" value=\"" + wifi_ssid + "\">\
-    <label for=\"fname\">wifi password:</label>\
-    <input type=\"text\" name=\"wifi password\" value=\"" + wifi_password + "\">\
-    <label for=\"fname\">senzor distance from bottom level:</label>\
-    <input type=\"text\" name=\"sensor distance\" value=\"" + sensor_height_cm + "\">\
-    <label for=\"fname\">tank diameter:</label>\
-    <input type=\"text\" name=\"tank diameter\" value=\"" + tank_diameter_cm + "\">\
-    <input type=\"submit\" value=\"Submit\">\
-  </form>";
-  server.send(200, "text/html", htmlPage);
-}
-
-void handleForm() {
-  String message = F("<html><head>"
-                    "<meta http-equiv=\"refresh\" content=\"10; URL=http://watertankmeter.local/\">"
-                    "</head>"
-                    "<body>");
-  
-  message += "Setup data:<br>";
-  for (uint8_t i = 0; i < server.args(); i++) {
-    message += " " + server.argName(i) + ": " + server.arg(i) + "<br>";
-    if (server.argName(i) == "wifi name") {
-      wifi_ssid = server.arg(i); 
-    } else if (server.argName(i) == "wifi password") {
-      wifi_password = server.arg(i); 
-    } else if (server.argName(i) == "sensor distance") {
-      sensor_height_cm = server.arg(i).toInt();
-    } else if (server.argName(i) == "tank diameter") {
-      tank_diameter_cm = server.arg(i).toInt();
+void handleSave(AsyncWebServerRequest *request) {
+  String response;
+  DynamicJsonDocument jDoc(256);
+  bool wifi_unchanged = true;
+  for (uint8_t i = 0; i < request->args(); i++) {
+    Serial.println("Save param:" + request->argName(i) + " - " + request->arg(i));
+    jDoc[request->argName(i)] = request->arg(i);
+    if (request->argName(i) == "wifi name") {
+      wifi_unchanged = wifi_unchanged && wifi_ssid == request->arg(i);
+      wifi_ssid = request->arg(i); 
+    } else if (request->argName(i) == "wifi password") {
+      wifi_unchanged = wifi_unchanged && wifi_password == request->arg(i);
+      wifi_password = request->arg(i); 
+    } else if (request->argName(i) == "sensor distance") {
+      sensor_height_cm = request->arg(i).toInt();
+    } else if (request->argName(i) == "tank diameter") {
+      tank_diameter_cm = request->arg(i).toInt();
     }
   }
+  connection_success = wifi_unchanged;
+  should_reconnect = !wifi_unchanged;
   saveConfig();
-  message += "<br> <form method=\"get\" action=\"/\">\
-    <input type=\"submit\" value=\"Home\">\
-    </form></body></html>";
-  server.send(200, "text/html", message);
-  delay(2000);
-  connectWifi();
-  setupMDNS();
-  setupNTP();
+  Serial.println("sending form data back");
+  serializeJson(jDoc, response);
+  Serial.println("form data serialized");
+  request->send(200, "application/json", response);
+  Serial.println("form data ssend back to client");
 }
 
 
 void loadConfig() {
-  if (!LittleFS.begin()) {
-    Serial.println("LittleFS mount failed");
-    return;
-  }
   Serial.println("load config:");
   StaticJsonDocument<256> doc;
-  if (LittleFS.exists(CONFIG_PATH)) {
+  EepromStream eepromStream(0, 256);
+  deserializeJson(doc, eepromStream);
+  if (doc != NULL) {
+//  if (LittleFS.exists(CONFIG_PATH)) {
     Serial.println("found config file");
-    File file = LittleFS.open(CONFIG_PATH, "r");
-    deserializeJson(doc, file);
-    file.close();
-    wifi_ssid = String(doc["wifi ssid"]);
-    wifi_password = String(doc["wifi password"]);
-    sensor_height_cm = doc["sensor height cm"];
-    tank_diameter_cm = doc["tank diameter cm"];
+//    File file = LittleFS.open(CONFIG_PATH, "r");
+//    deserializeJson(doc, file);
+//    file.close();
+    wifi_ssid = String(doc["wifi ssid"]) ? String(doc["wifi ssid"]) : "";
+    wifi_password = String(doc["wifi password"]) ? String(doc["wifi password"]) : "";
+    sensor_height_cm = doc["sensor height cm"] ? doc["sensor height cm"] : 0;
+    tank_diameter_cm = doc["tank diameter cm"] ? doc["tank diameter cm"] : 0;
+    connection_success = doc["connection success"] ? doc["connection success"] : false;
     Serial.println("loaded config");
     serializeJson(doc, Serial);
     Serial.println();
   } else {
-    LittleFS.format();
     Serial.println("not found config file, using dummy defaults");
-    sensor_height_cm = 200;
-    tank_diameter_cm = 100;
+    sensor_height_cm = 0;
+    tank_diameter_cm = 0;
     wifi_ssid = "";
     wifi_password = "";
   }
-  LittleFS.end();
-  Serial.flush(); 
 }
 
 void saveConfig() {
-  if (!LittleFS.begin()) {
-    Serial.println("LittleFS mount failed");
-    return;
-  }
-  if (LittleFS.exists(CONFIG_PATH)) {
-    LittleFS.remove(CONFIG_PATH);
-  }
+//  if (LittleFS.exists(CONFIG_PATH)) {
+//    LittleFS.remove(CONFIG_PATH);
+//  }
   StaticJsonDocument<256> doc;
   doc["wifi ssid"] = wifi_ssid;
   doc["wifi password"] = wifi_password;
   doc["sensor height cm"] = sensor_height_cm;
   doc["tank diameter cm"] = tank_diameter_cm;
-  File file = LittleFS.open(CONFIG_PATH, "w");
+  doc["connection success"] = connection_success;
+//  File file = LittleFS.open(CONFIG_PATH, "w");
   Serial.println("save config:");
   serializeJson(doc, Serial);
   Serial.println();
-  Serial.println("saving to file");
-  serializeJson(doc, file);
-  file.close();
-  LittleFS.end();
-  Serial.flush();
+  Serial.println("saving to EEPROM");
+//  serializeJson(doc, file);
+  EepromStream eepromStream(0, 256);
+  serializeJson(doc, eepromStream);
+  eepromStream.flush(); 
+  Serial.println("config saved");
+//  file.close();
 }
 
 void makeSoftAP() {
@@ -292,10 +247,21 @@ void makeSoftAP() {
 }
 
 void connectWifi() {
+  if (wifi_ssid == "" || wifi_ssid == NULL) {
+    Serial.println("empty ssid, turning to softAP");
+    makeSoftAP();
+    return;
+  }
+  if (wifi_password == "" || wifi_password == NULL) {
+    Serial.println("empty wifi password, turning to softAP");
+    makeSoftAP();
+    return;
+  }
   int i = 0;
   Serial.print("Wi-Fi mode set to WIFI_STA ... ");
   Serial.println(WiFi.mode(WIFI_STA) ? "Ready" : "Failed!");
   
+  Serial.println("Connecting to wifi:" + wifi_ssid + " password:" + wifi_password);
   WiFi.begin(wifi_ssid, wifi_password);
 
   Serial.println("Connecting");
@@ -312,9 +278,24 @@ void connectWifi() {
     makeSoftAP();
     return;
   }
-  
   Serial.print("Connected, IP address: ");
   Serial.println(WiFi.localIP());
+  if (!connection_success) {
+    connection_success = true;
+    saveConfig();
+  }
+}
+
+void checkWifi() {
+  /*
+   * if in AP mode, and last WIFI connection was successful, try to reconnect
+   */
+  if ((wifi_get_opmode() == 2) && connection_success) {
+    if (nowtime - lastWificheck > 60) {
+      lastWificheck = nowtime;
+      connectWifi();
+    }
+  }
 }
 
 void setupNTP() {
@@ -331,65 +312,37 @@ void setupMDNS() {
   }
 }
 
-
 void setup()
 {
   Serial.begin(9600);
   Serial.println("Starting setup");
   Serial.flush();
+  Serial.println("Initializing EEPROM...");
+  EEPROM.begin(256);
   
   pinMode(LED_BUILTIN, OUTPUT);  // Initialize the LED_BUILTIN pin as an output
   pinMode(ULTRASOUND_ECHOPIN, INPUT);
   pinMode(ULTRASOUND_TRIGPIN, OUTPUT);
 
-//  LittleFS.begin();
+  LittleFS.begin();
   
   loadConfig();
   connectWifi();
   setupMDNS();
   setupNTP();
-  
+  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html");
+  server.on("/data", HTTP_GET, handleData);
+  server.on("/save", HTTP_POST, handleSave);
+  AsyncElegantOTA.begin(&server);
   server.begin();
   Serial.println("Web server started");
-  server.on("/", handleRoot);
-  server.on("/setup/", handleSetup);
-  server.on("/postform/", HTTP_POST, handleForm);
+
   MDNS.addService("http", "tcp", 80);
-
-  ArduinoOTA.setHostname(myname);
-
-  ArduinoOTA.onStart([]() {
-    String type;
-    if (ArduinoOTA.getCommand() == U_FLASH) {
-      type = "sketch";
-    } else {  // U_FS
-      type = "filesystem";
-    }
-//    LittleFS.end();
-    Serial.println("Start updating " + type);
-  });
-  ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
-//    LittleFS.begin();
-  });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  });
-  ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) {
-      Serial.println("Auth Failed");
-    } else if (error == OTA_BEGIN_ERROR) {
-      Serial.println("Begin Failed");
-    } else if (error == OTA_CONNECT_ERROR) {
-      Serial.println("Connect Failed");
-    } else if (error == OTA_RECEIVE_ERROR) {
-      Serial.println("Receive Failed");
-    } else if (error == OTA_END_ERROR) {
-      Serial.println("End Failed");
-    }
-  });
-  ArduinoOTA.begin();
+  
+  Dir dir = LittleFS.openDir("/");
+  while (dir.next()) {
+    Serial.println(dir.fileName() + " - " + dir.fileSize());
+  }
 }
 
 void loop()
@@ -397,22 +350,26 @@ void loop()
   digitalWrite(LED_BUILTIN, HIGH);
   MDNS.update();
   timeClient.update();
-  ArduinoOTA.handle();
 
-  int current_hour = timeStep();
-
+  if (should_reconnect) {
+    connectWifi();
+    should_reconnect = false;
+  }
+  current_hour = timeStep();
+  nowtime = timeClient.getEpochTime();
+  checkWifi();
+  
   current_distance_cm = measureDistance(); 
   calc_average_distance();
-  if (int(last_average_distance_cm) != int(average_distance_cm)) {
+  if (round(last_average_distance_cm) != round(average_distance_cm)) {
     last_average_distance_cm = average_distance_cm;
-    Serial.println(formatTime(timeClient.getEpochTime()) + " @ " + String(average_distance_cm) + "cm " + String(current_distance_cm) + "cm");
+    Serial.println(formatTime(nowtime) + " @ " + String(average_distance_cm) + "cm " + String(current_distance_cm) + "cm " + ESP.getFreeHeap());
   }
   if (measurements[current_hour] == 0) {
     Serial.println("timestep " + String(current_hour));
   }
   measurements[timeStep()] = average_distance_cm;
 
-  server.handleClient();
   digitalWrite(LED_BUILTIN, LOW);
   delay(500);
   loop_count++;

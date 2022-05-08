@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<script src="jquery-3.6.0.min.js"></script>
+	<script src="bootstrap.min.js"></script>
+	<script src="sensor.js"></script>
+	<link href="sensor.css" rel="stylesheet">
+	<link href="bootstrap.min.css" rel="stylesheet">
+	<title>Water tank meter</title>
+</head>
+
+<body>
+	<div class="container">
+		<div class="row justify-content-md-center">
+			<div class="col col-lg-4">
+				<h1 class="text-center"> water tank </h1>
+				<div class="vertical">
+					<div class="progress-bar">
+						<div class="progress-track">
+							<span id="tanktext" style="color: rgb(0, 0, 0);">Loading</span>
+							<span id="tanktextVol" style="color: rgb(0, 0, 0);">Loading</span>
+							<div class="progress-fill" style="height: 0%;"></div>
+						</div>
+					</div>
+				</div>
+				<div id="liveAlertPlaceholder"></div>
+
+				<div align="center">
+					<div class="row">
+						<div class="col">
+							<div class="d-grid gap-2">
+								<button id="togglesetup" class="btn btn-secondary" type="button" data-bs-toggle="modal" data-bs-target="#setupModal">Setup</button>
+							</div>
+						</div>
+						<div class="col">
+							<div class="d-grid gap-2">
+								<button id="info" class="btn btn-info" type="button" data-bs-toggle="modal" data-bs-target="#infoModal">Info</button>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="modal fade" id="infoModal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="infoModalLabel" aria-hidden="true">
+					<div class="modal-dialog">
+						<div class="modal-content">
+							<div class="modal-header">
+								<h5 class="modal-title" id="infoModalLabel">Sensor info</h5>
+								<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+							</div>
+							<div class="modal-body">
+								<table id="infoTable" class="table table-striped table-bordered">
+								</table>
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="modal fade" id="setupModal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="setupModalLabel" aria-hidden="true">
+					<div class="modal-dialog">
+						<div class="modal-content">
+							<div class="modal-header">
+								<h5 class="modal-title" id="setupModalLabel">Sensor setup</h5>
+								<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+							</div>
+							<div class="modal-body">
+								<form id="setup">
+									<div class="form-group">
+										<label for="wifi_ssid">WIFI SSID</label>
+										<input type="text" name="wifi name" class="form-control" id="wifi_ssid" aria-describedby="WIFI name" placeholder="Enter WIFI name">
+									</div>
+									<div class="form-group">
+										<label for="wifi_password">WIFI password</label>
+										<input type="text" name="wifi password" class="form-control" id="wifi_password" placeholder="Password">
+									</div>
+									<div class="form-group">
+										<label for="sensor_height_cm">Sensor height</label>
+										<input type="text" name="sensor distance" class="form-control" id="sensor_height_cm" aria-describedby="WIFI name" placeholder="hight in cm">
+										<small id="sensor_height_cmHelp" class="form-text text-muted">How high is the sensor from the bottom of the tank in centimeter</small>
+									</div>
+									<div class="form-group">
+										<label for="tank_diameter_cm">Tank diameter</label>
+										<input type="text" name="tank diameter" class="form-control" id="tank_diameter_cm" aria-describedby="WIFI name" placeholder="diamenter in cm">
+										<small id="tank_diameter_cmHelp" class="form-text text-muted">Diameter of the tank in centimenter</small>
+									</div>
+								</form>
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+								<button id="savesetup" type="button" class="btn btn-primary">Save changes</button>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="mt-2">
+					<table id="historyTable" class="table table-striped table-bordered">
+						<tr>
+							<th>time</th>
+							<th>distance</th>
+							<th>volume</th>
+						</tr>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+</body>
+
+</html>
