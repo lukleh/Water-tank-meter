@@ -6,14 +6,14 @@ ESP8266 based project for measuring water level in tank using ultrasonic sensor 
 
 ## TODO
 
-* connectin digram
-* list electronic parts
-* assemple into 3d printed box
+* connection diagram
+* list electronics parts
+* assemble into 3d printed box
 * attach pictures
 * list dependencies
 * usage & setup guide 
 
 ## DONE
 
-* firmware
+* firmware code
 * webapp
