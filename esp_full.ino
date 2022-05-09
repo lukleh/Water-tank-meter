@@ -1,11 +1,8 @@
 #define DYNAMIC_JSON_DOCUMENT_SIZE 16384
-#include <NTPClient.h>
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
-#include <TimeLib.h>
 #include "AsyncJson.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -13,14 +10,15 @@
 #include <AsyncElegantOTA.h>
 #include <EEPROM.h>
 #include <StreamUtils.h>
-#include <Timezone.h>
+#include <time.h> 
+
+#define MY_NTP_SERVER "at.pool.ntp.org"           
+#define MY_TZ "CET-1CEST,M3.5.0,M10.5.0/3" 
 
 #define ULTRASOUND_ECHOPIN D6// Pin to receive echo pulse
 #define ULTRASOUND_TRIGPIN D7// Pin to send trigger pulse
 #define MEASUREMENT_COUNT 168
 
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP);
 AsyncWebServer server(80);
 
 unsigned long current_distance_cm = 0;
@@ -39,16 +37,15 @@ bool should_reconnect = false;
 
 int current_hour = 0;
 int lastWificheck = 0;
-int nowtime = 0;
 long rssi = 0;
 
-// Central European Time (Frankfurt, Prague)
-TimeChangeRule CEST = {"CEST", Last, Sun, Mar, 27, 120};     // Central European Summer Time
-TimeChangeRule CET = {"CET ", Last, Sun, Oct, 30, 60};       // Central European Standard Time
-Timezone CE(CEST, CET);
+time_t now;                       
+tm tm;  
 
-int getNow() {
-  return CE.toLocal(timeClient.getEpochTime());
+time_t getNow() {
+  time(&now);
+  localtime_r(&now, &tm);
+  return now;
 }
 
 void calc_average_distance() {
@@ -91,7 +88,7 @@ String prependDigits(int digits) {
 }
 
 String formatTime(int time_stamp) {
-  return String(year(time_stamp)) + "-" + prependDigits(month(time_stamp)) + "-" + prependDigits(day(time_stamp)) + " " + prependDigits(hour(time_stamp)) + ":" + prependDigits(minute(time_stamp)) + ":" + prependDigits(second(time_stamp));
+  return String(tm.tm_year + 1900) + "-" + prependDigits(tm.tm_mon + 1) + "-" + prependDigits(tm.tm_mday) + " " + prependDigits(tm.tm_hour) + ":" + prependDigits(tm.tm_min) + ":" + prependDigits(tm.tm_sec);
 }
 
 int subtractTime(int ts, int diff_hours) {
@@ -125,7 +122,6 @@ int measureDistance() {
   for (int i = 0; i < 5; i++) {
     raw[i] = rawDistance();
     raw_sum += raw[i];
-//    Serial.print(String(raw[i]) + ",");
     delay(100);
   }
   raw_best = raw[0];
@@ -134,8 +130,6 @@ int measureDistance() {
       raw_best = raw[i];
     }
   }
-//  Serial.println();
-//  Serial.println(raw_best);
   return raw_best;
 }
 
@@ -164,14 +158,14 @@ void handleData(AsyncWebServerRequest *request){
   JsonArray data = jDoc.createNestedArray("data");
   for(int i = current_hour; i > -1; i--) {
     JsonObject measurement = data.createNestedObject();
-    measurement["time"] = formatTime(subtractTime(nowtime, calculateTimeDiff(current_hour, i)) / 3600 * 3600);
+    measurement["time"] = formatTime(subtractTime(now, calculateTimeDiff(current_hour, i)) / 3600 * 3600);
     measurement["volume"] = waterVolumeM3(measurements[i]);
     measurement["distance"] = measurements[i];
   }
 
   for(int i = MEASUREMENT_COUNT-1; i > current_hour; i--) {
     JsonObject measurement = data.createNestedObject();
-    measurement["time"] = formatTime(subtractTime(nowtime, calculateTimeDiff(current_hour, i)) / 3600 * 3600);
+    measurement["time"] = formatTime(subtractTime(now, calculateTimeDiff(current_hour, i)) / 3600 * 3600);
     measurement["volume"] = waterVolumeM3(measurements[i]);
     measurement["distance"] = measurements[i];
   }
@@ -313,17 +307,11 @@ void checkWifi() {
    * if in AP mode, and last WIFI connection was successful, try to reconnect
    */
   if ((wifi_get_opmode() == 2) && connection_success) {
-    if (nowtime - lastWificheck > 60) {
-      lastWificheck = nowtime;
+    if (now - lastWificheck > 60) {
+      lastWificheck = now;
       connectWifi();
     }
   }
-}
-
-void setupNTP() {
-  timeClient.begin();
-//  timeClient.setTimeOffset(3600);
-  timeClient.update();
 }
 
 void setupMDNS() {
@@ -338,7 +326,8 @@ void setup()
 {
   Serial.begin(9600);
   Serial.println("Starting setup");
-  Serial.flush();
+  Serial.println("NTP TZ DST - bare minimum");
+  configTime(MY_TZ, MY_NTP_SERVER);
   Serial.println("Initializing EEPROM...");
   EEPROM.begin(256);
   
@@ -351,7 +340,6 @@ void setup()
   loadConfig();
   connectWifi();
   setupMDNS();
-  setupNTP();
   server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html");
   server.on("/data", HTTP_GET, handleData);
   server.on("/save", HTTP_POST, handleSave);
@@ -371,13 +359,12 @@ void loop()
 {
   digitalWrite(LED_BUILTIN, HIGH);
   MDNS.update();
-  timeClient.update();
 
   if (should_reconnect) {
     connectWifi();
     should_reconnect = false;
   }
-  nowtime = getNow();
+  getNow();
   current_hour = timeStep();
   checkWifi();
   rssi = WiFi.RSSI();
@@ -385,7 +372,7 @@ void loop()
   calc_average_distance();
   if (round(last_average_distance_cm) != round(average_distance_cm)) {
     last_average_distance_cm = average_distance_cm;
-    Serial.println(formatTime(nowtime) + " @ " + String(average_distance_cm) + "cm " + String(current_distance_cm) + "cm " + ESP.getFreeHeap());
+    Serial.println(formatTime(now) + " @ " + String(average_distance_cm) + "cm " + String(current_distance_cm) + "cm " + ESP.getFreeHeap());
   }
   if (measurements[current_hour] == 0) {
     Serial.println("timestep " + String(current_hour));
