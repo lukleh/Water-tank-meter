@@ -13,6 +13,7 @@
 #include <AsyncElegantOTA.h>
 #include <EEPROM.h>
 #include <StreamUtils.h>
+#include <Timezone.h>
 
 #define ULTRASOUND_ECHOPIN D6// Pin to receive echo pulse
 #define ULTRASOUND_TRIGPIN D7// Pin to send trigger pulse
@@ -38,8 +39,17 @@ bool should_reconnect = false;
 
 int current_hour = 0;
 int lastWificheck = 0;
-int nowtime = timeClient.getEpochTime();
+int nowtime = 0;
 long rssi = 0;
+
+// Central European Time (Frankfurt, Prague)
+TimeChangeRule CEST = {"CEST", Last, Sun, Mar, 27, 120};     // Central European Summer Time
+TimeChangeRule CET = {"CET ", Last, Sun, Oct, 30, 60};       // Central European Standard Time
+Timezone CE(CEST, CET);
+
+int getNow() {
+  return CE.toLocal(timeClient.getEpochTime());
+}
 
 void calc_average_distance() {
   if (average_distance_cm == 0) {
@@ -50,7 +60,7 @@ void calc_average_distance() {
 }
 
 int timeStep() {
-  return timeClient.getEpochTime() % 604800L / 3600;
+  return getNow() % 604800L / 3600;
 }
 
 int remainingDepth(int distance_cm) {
@@ -139,13 +149,13 @@ void handleData(AsyncWebServerRequest *request){
   info["percent full"] = calcPercentFull(average_distance_cm);
   info["average distance"] = int(average_distance_cm);
   info["current distance"] = current_distance_cm;
-  info["time"] = formatTime(timeClient.getEpochTime());
+  info["time"] = formatTime(getNow());
   info["sensor height"] = sensor_height_cm;
   info["tank diameter"] = tank_diameter_cm;
   info["WIFI"] = ((wifi_get_opmode() == 2) ? ("AP: " + String(myname)) : ("Station: " + wifi_ssid));
   info["your IP"] = request->client()->remoteIP().toString();
   info["my IP"] =  WiFi.localIP().toString();
-  info["timestamp"] = timeClient.getEpochTime();
+  info["timestamp"] = getNow();
   info["loop number"] = loop_count;
   info["wifi name"] = wifi_ssid;
   info["wifi password"] = wifi_password;
@@ -312,7 +322,7 @@ void checkWifi() {
 
 void setupNTP() {
   timeClient.begin();
-  timeClient.setTimeOffset(3600);
+//  timeClient.setTimeOffset(3600);
   timeClient.update();
 }
 
@@ -367,8 +377,8 @@ void loop()
     connectWifi();
     should_reconnect = false;
   }
+  nowtime = getNow();
   current_hour = timeStep();
-  nowtime = timeClient.getEpochTime();
   checkWifi();
   rssi = WiFi.RSSI();
   current_distance_cm = measureDistance(); 
