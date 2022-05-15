@@ -15,8 +15,8 @@
 #define MY_NTP_SERVER "at.pool.ntp.org"           
 #define MY_TZ "CET-1CEST,M3.5.0,M10.5.0/3" 
 
-#define ULTRASOUND_ECHOPIN D6// Pin to receive echo pulse
-#define ULTRASOUND_TRIGPIN D7// Pin to send trigger pulse
+#define ULTRASOUND_ECHOPIN D8// Pin to receive echo pulse TX
+#define ULTRASOUND_TRIGPIN D7// Pin to send trigger pulse RX
 #define MEASUREMENT_COUNT 168
 
 AsyncWebServer server(80);
@@ -263,12 +263,12 @@ void makeSoftAP() {
 }
 
 void connectWifi() {
-  if (wifi_ssid == "" || wifi_ssid == NULL) {
+  if (wifi_ssid == "" || wifi_ssid == NULL || wifi_ssid == "null" ) {
     Serial.println("empty ssid, turning to softAP");
     makeSoftAP();
     return;
   }
-  if (wifi_password == "" || wifi_password == NULL) {
+  if (wifi_password == "" || wifi_password == NULL || wifi_password == "null") {
     Serial.println("empty wifi password, turning to softAP");
     makeSoftAP();
     return;
