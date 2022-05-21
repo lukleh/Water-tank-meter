@@ -1,22 +1,22 @@
-#define DYNAMIC_JSON_DOCUMENT_SIZE 8192
+#define DYNAMIC_JSON_DOCUMENT_SIZE 16384
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266HTTPUpdateServer.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <AsyncElegantOTA.h>
+#include "AsyncJson.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <StreamUtils.h>
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
 
-//#define ULTRASOUND_ECHOPIN D8// Pin to receive echo pulse TX
-//#define ULTRASOUND_TRIGPIN D7// Pin to send trigger pulse RX
-#define ULTRASOUND_ECHOPIN 15 // Pin to receive echo pulse TX
-#define ULTRASOUND_TRIGPIN 13 // Pin to send trigger pulse RX
+#define FIRMWARE_VERSION 1 // firmware version
+#define ULTRASOUND_ECHOPIN 13 // D7 blue  Pin to receive echo pulse TX
+#define ULTRASOUND_TRIGPIN 12 // D6 green Pin to send trigger pulse RX
 #define MEASUREMENT_COUNT 168
 #define CONFIG_SIZE 256
 
-ESP8266WebServer server(80);
-ESP8266HTTPUpdateServer httpUpdater;
+AsyncWebServer server(80);
 
 char wifi_ssid[32];
 char wifi_password[32];
@@ -25,7 +25,7 @@ float average_distance_cm = 0;
 byte measurements[MEASUREMENT_COUNT] = {};
 int loop_count = 0;
 int lastTimeStep = 0;
-const char *myname = "watertankmeter";
+char sensor_name[32] = {"watertankmeterlk"};
 
 int sensor_height_cm = 0;
 int tank_diameter_cm = 0;
@@ -72,7 +72,7 @@ int remainingDepth(int distance_cm) {
 }
 
 int calcPercentFull(int distance_cm) {
-  if (sensor_height_cm == 0) {
+  if (distance_cm == 0) {
     return 0;
   }
   return (remainingDepth(distance_cm) / (sensor_height_cm - 20.0)) * 100;
@@ -99,28 +99,29 @@ unsigned long rawDistance() {
 
 
 int measureDistance() {
-  return rawDistance();
-  //  int raw_sum = 0;
-  //  int raw_best = 0;
-  //  int raw[5] = {};
-  //  for (int i = 0; i < 5; i++) {
-  //    raw[i] = rawDistance();
-  //    raw_sum += raw[i];
-  //    delay(100);
-  //  }
-  //  raw_best = raw[0];
-  //  for (int i = 0; i < 5; i++) {
-  //    if (abs(raw_best - (raw_sum / 6.0)) > abs(raw[i] - (raw_sum / 6.0))) {
-  //      raw_best = raw[i];
-  //    }
-  //  }
-  //  return raw_best;
+  int raw_sum = 0;
+  int raw_best = 0;
+  int raw[5] = {};
+  for (int i = 0; i < 5; i++) {
+    raw[i] = rawDistance();
+    raw_sum += raw[i];
+    delay(50);
+  }
+  raw_best = raw[0];
+  for (int i = 0; i < 5; i++) {
+    if (abs(raw_best - (raw_sum / 6.0)) > abs(raw[i] - (raw_sum / 6.0))) {
+      raw_best = raw[i];
+    }
+  }
+  return raw_best;
 }
 
 
-void handleData() {
+void handleData(AsyncWebServerRequest *request) {
   Serial.println("Handle data");
-  DynamicJsonDocument jDoc(4096);
+  AsyncJsonResponse * response = new AsyncJsonResponse();
+  response->addHeader("Server", "ESP Async Web Server");
+  JsonObject jDoc = response->getRoot();
   JsonObject info = jDoc.createNestedObject("info");
   info["volume"] = waterVolumeM3(average_distance_cm);
   info["percent full"] = calcPercentFull(average_distance_cm);
@@ -128,8 +129,10 @@ void handleData() {
   info["current distance"] = current_distance_cm;
   info["sensor height"] = sensor_height_cm;
   info["tank diameter"] = tank_diameter_cm;
+  info["firmware version"] = FIRMWARE_VERSION;
+  info["sensor name"] = sensor_name;
   info["WIFI"] = (wifi_get_opmode() == 2) ? "AP" : "Station";
-  info["your IP"] = server.client().remoteIP().toString();
+  info["your IP"] = request->client()->remoteIP().toString();
   info["my IP"] =  WiFi.localIP().toString();
   info["uptime"] = getNow();
   info["loop number"] = loop_count;
@@ -148,64 +151,57 @@ void handleData() {
 
   JsonArray data = jDoc.createNestedArray("data");
   for (int i = 0; i < MEASUREMENT_COUNT; i++) {
-    if (measurements[i] == 0) {
-      continue;
-    }
+    //        if (measurements[i] == 0) {
+    //          continue;
+    //        }
     JsonObject measurement = data.createNestedObject();
     measurement["i"] = i;
-    measurement["v"] = round(waterVolumeM3(measurements[i]) * 100) / 100.0;
-    measurement["d"] = round(measurements[i] * 100) / 100.0;
+    measurement["v"] = round(waterVolumeM3(measurements[0]) * 100) / 100.0;
+    measurement["d"] = round(measurements[0] * 100) / 100.0;
   }
-  String response;
-  serializeJson(jDoc, response);
-  server.send(200, "application/json", response);
+  response->setLength();
+  request->send(response);
 }
 
 
-void handleSave() {
+void handleSave(AsyncWebServerRequest *request) {
   Serial.println("Handle save");
   String response;
   bool wifi_unchanged = true;
-  DynamicJsonDocument jDoc(128);
-  for (uint8_t i = 0; i < server.args(); i++) {
-    Serial.printf("Save param:%s - %s\n", server.argName(i).c_str(), server.arg(i).c_str());
-    jDoc[server.argName(i)] = server.arg(i);
-    if (server.argName(i) == "wifi name") {
-      wifi_unchanged = wifi_unchanged && strcmp(wifi_ssid, server.arg(i).c_str()) == 0;
-      strcpy(wifi_ssid, server.arg(i).c_str());
-    } else if (server.argName(i) == "wifi password") {
-      wifi_unchanged = wifi_unchanged && strcmp(wifi_password, server.arg(i).c_str()) == 0;
-      strcpy(wifi_password, server.arg(i).c_str());
-    } else if (server.argName(i) == "sensor distance") {
-      sensor_height_cm = server.arg(i).toInt();
-    } else if (server.argName(i) == "tank diameter") {
-      tank_diameter_cm = server.arg(i).toInt();
+  DynamicJsonDocument jDoc(256);
+  for (uint8_t i = 0; i < request->args(); i++) {
+    Serial.printf("Save param:%s - %s\n", request->argName(i).c_str(), request->arg(i).c_str());
+    jDoc[request->argName(i)] = request->arg(i);
+    if (request->argName(i) == "wifi name") {
+      wifi_unchanged = wifi_unchanged && strcmp(wifi_ssid, request->arg(i).c_str()) == 0;
+      strcpy(wifi_ssid, request->arg(i).c_str());
+    } else if (request->argName(i) == "wifi password") {
+      wifi_unchanged = wifi_unchanged && strcmp(wifi_password, request->arg(i).c_str()) == 0;
+      strcpy(wifi_password, request->arg(i).c_str());
+    } else if (request->argName(i) == "sensor name") {
+      wifi_unchanged = wifi_unchanged && strcmp(sensor_name, request->arg(i).c_str()) == 0;
+      strcpy(sensor_name, request->arg(i).c_str());
+    } else if (request->argName(i) == "sensor distance") {
+      sensor_height_cm = request->arg(i).toInt();
+    } else if (request->argName(i) == "tank diameter") {
+      tank_diameter_cm = request->arg(i).toInt();
     }
   }
+
   saveConfig();
   serializeJson(jDoc, response);
+  Serial.print("response ");
   Serial.println(response);
-  server.send(200, "application/json", response);
+  request->send(200, "application/json", response);
   if (!wifi_unchanged) {
-    Serial.printf("WIFI credentials changed, restarting");
+    Serial.printf("Network settings changed, restarting");
     ESP.restart();
   }
 }
 
-void handleRoot() {
-  Serial.println("Handle root");
-  File file = LittleFS.open("index.html", "r");
-  if (!file) {
-    server.send(200, "text/plain", "no index.html file found");
-  } else {
-    server.streamFile(file, "text/html");
-    file.close();
-  }
-}
-
-void handleRestart() {
+void handleRestart(AsyncWebServerRequest *request) {
   Serial.println("Handle restart");
-  server.send(200, "text/plain", "restarting");
+  request->send(200, "application/json", "restarting");
   ESP.restart();
 }
 
@@ -219,6 +215,9 @@ void loadConfig() {
     Serial.println("found config file");
     strcpy(wifi_ssid, doc["wifi ssid"]);
     strcpy(wifi_password, doc["wifi password"]);
+    if (!doc["sensor name"].isNull()) {
+      strcpy(sensor_name, doc["sensor name"]);
+    }
     sensor_height_cm = doc["sensor height cm"];
     tank_diameter_cm = doc["tank diameter cm"];
     connection_success = doc["connection success"];
@@ -238,6 +237,7 @@ void saveConfig() {
   StaticJsonDocument<CONFIG_SIZE> doc;
   doc["wifi ssid"] = wifi_ssid;
   doc["wifi password"] = wifi_password;
+  doc["sensor name"] = sensor_name;
   doc["sensor height cm"] = sensor_height_cm;
   doc["tank diameter cm"] = tank_diameter_cm;
   doc["connection success"] = connection_success;
@@ -254,7 +254,7 @@ void saveConfig() {
 void makeSoftAP() {
   Serial.print("Wi-Fi mode set to WIFI_AP ... ");
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(myname);
+  WiFi.softAP(sensor_name);
 }
 
 void connectWifi() {
@@ -266,7 +266,7 @@ void connectWifi() {
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(wifi_ssid, wifi_password);
-  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+  while (WiFi.waitForConnectResult(10000) != WL_CONNECTED) {
     Serial.println("WiFi failed, switching to AP");
     break;
   }
@@ -304,9 +304,9 @@ void flashInfo() {
   Serial.printf("Flash ide  size: %u bytes\n", ideSize);
   Serial.printf("Flash ide speed: %u Hz\n", ESP.getFlashChipSpeed());
   Serial.printf("Flash ide mode:  %s\n", (ideMode == FM_QIO ? "QIO" : ideMode == FM_QOUT ? "QOUT"
-                                                                    : ideMode == FM_DIO  ? "DIO"
-                                                                    : ideMode == FM_DOUT ? "DOUT"
-                                                                                         : "UNKNOWN"));
+                                          : ideMode == FM_DIO  ? "DIO"
+                                          : ideMode == FM_DOUT ? "DOUT"
+                                          : "UNKNOWN"));
   if (ideSize != realSize) {
     Serial.println("Flash Chip configuration wrong!\n");
   } else {
@@ -332,19 +332,19 @@ void setup()
   loadConfig();
   connectWifi();
 
-  MDNS.begin(myname);
+  MDNS.begin(sensor_name);
   if (LittleFS.begin()) {
     Serial.println("Filesystem mounted");
   } else {
     Serial.println("Filesystem NOT mounted");
   }
 
-  server.on("/", handleRoot);
+  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html");
   server.serveStatic("/static", LittleFS, "/");
   server.on("/data", HTTP_GET, handleData);
   server.on("/save", HTTP_POST, handleSave);
   server.on("/restart", HTTP_GET, handleRestart);
-  httpUpdater.setup(&server);
+  AsyncElegantOTA.begin(&server);
   server.begin();
   Serial.println("Web server started");
 
@@ -353,7 +353,7 @@ void setup()
   while (dir.next()) {
     Serial.printf("%s - %d\n", dir.fileName().c_str(), dir.fileSize());
   }
-  
+
   Serial.println("Setup finished");
 
   flashInfo();
@@ -362,7 +362,6 @@ void setup()
 void loop()
 {
   MDNS.update();
-  server.handleClient();
   checkWifi();
   digitalWrite(LED_BUILTIN, HIGH);
   current_distance_cm = measureDistance();
