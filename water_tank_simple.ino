@@ -25,7 +25,7 @@ float average_distance_cm = 0;
 byte measurements[MEASUREMENT_COUNT] = {};
 int loop_count = 0;
 int lastTimeStep = 0;
-char sensor_name[32] = {"watertankmeterlk"};
+char sensor_name[32] = {"watertankmeter"};
 
 int sensor_height_cm = 0;
 int tank_diameter_cm = 0;
@@ -151,13 +151,13 @@ void handleData(AsyncWebServerRequest *request) {
 
   JsonArray data = jDoc.createNestedArray("data");
   for (int i = 0; i < MEASUREMENT_COUNT; i++) {
-    //        if (measurements[i] == 0) {
-    //          continue;
-    //        }
+    if (measurements[i] == 0) {
+      continue;
+    }
     JsonObject measurement = data.createNestedObject();
     measurement["i"] = i;
-    measurement["v"] = round(waterVolumeM3(measurements[0]) * 100) / 100.0;
-    measurement["d"] = round(measurements[0] * 100) / 100.0;
+    measurement["v"] = round(waterVolumeM3(measurements[i]) * 100) / 100.0;
+    measurement["d"] = round(measurements[i] * 100) / 100.0;
   }
   response->setLength();
   request->send(response);
@@ -207,7 +207,7 @@ void handleRestart(AsyncWebServerRequest *request) {
 
 
 void loadConfig() {
-  Serial.println("load config:");
+  Serial.println("loading config");
   StaticJsonDocument<CONFIG_SIZE> doc;
   EepromStream eepromStream(0, CONFIG_SIZE);
   deserializeJson(doc, eepromStream);
@@ -221,7 +221,7 @@ void loadConfig() {
     sensor_height_cm = doc["sensor height cm"];
     tank_diameter_cm = doc["tank diameter cm"];
     connection_success = doc["connection success"];
-    Serial.println("loaded config");
+    Serial.print("loaded config: ");
     serializeJson(doc, Serial);
     Serial.println();
   } else {
@@ -241,7 +241,7 @@ void saveConfig() {
   doc["sensor height cm"] = sensor_height_cm;
   doc["tank diameter cm"] = tank_diameter_cm;
   doc["connection success"] = connection_success;
-  Serial.println("save config:");
+  Serial.print("save config:");
   serializeJson(doc, Serial);
   Serial.println();
   Serial.println("saving to EEPROM");
