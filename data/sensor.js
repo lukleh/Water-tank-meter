@@ -1,7 +1,7 @@
 $(function() {
   console.log("ready!");
   var dataInterval = 60 * 1000;
-
+  var timer = Date.now();
   function alert(message, type) {
 		$("#liveAlertPlaceholder").empty();
     var wrapper = document.createElement('div')
@@ -36,13 +36,10 @@ $(function() {
   });
 
   function populateForm(json) {
-		if (!json.info["wifi name"] || !json.info["wifi password"] || json.info["sensor height"] <= 0 || json.info["tank diameter"] <= 0) {
-			$("#setupModal").modal('show');
-			return;
-		}
     if (!$('#setup input').is(":focus")) {
       $("#wifi_ssid").val(json.info["wifi name"]);
       $("#wifi_password").val(json.info["wifi password"]);
+      $("#sensor_name").val(json.info["sensor name"]);
       $("#sensor_height_cm").val(json.info["sensor height"]);
       $("#tank_diameter_cm").val(json.info["tank diameter"]);
     }
@@ -51,7 +48,7 @@ $(function() {
   function updateTank(json) {
     if (json.info["current distance"] == 0) {
       $("#tanktext").text("SENSOR");
-      $("#tanktextVol").text("NO RANGE");
+      $("#tanktextVol").text("NO DATA");
       $("div.progress-fill").css("height", 0 + "%");
     } else {
       $("#tanktext").text(json.info["percent full"] + "%");
@@ -63,7 +60,7 @@ $(function() {
   function updateHistory(json) {
     $("#historyTable tr").slice(1).remove();
     for (const element of json.data) {
-			$("#historyTable").append(`<tr><td>${element.time}</td><td>${element.distance}cm</td><td>${element.volume.toFixed(2)}m<sup>3</sup></td></tr>`);
+			$("#historyTable").append(`<tr><td>${element.i}</td><td>${element.d}cm</td><td>${element.v}m<sup>3</sup></td></tr>`);
     }
   }
 
@@ -72,9 +69,20 @@ $(function() {
     for (var key in json.info) {
       $("#infoTable").append(`<tr><td>${key}</td><td>${json.info[key]}</td></tr>`);
     }
-    rssi = json.info["signal strength dBi"]
-    rssi_percent = Math.min(Math.max(2 * (rssi + 100), 0), 100)
-    $("#wifistrength").css("width", rssi_percent + "%").attr("aria-valuenow", rssi_percent).text("WIFI " + rssi_percent + "%");
+    if ("signal strength dBi" in json.info) {
+      rssi = json.info["signal strength dBi"]
+      rssi_percent = Math.min(Math.max(2 * (rssi + 100), 0), 100)
+      $("#wifistrengthbox").show();
+      $("#wifistrength").css("width", rssi_percent + "%").attr("aria-valuenow", rssi_percent).text("WIFI " + rssi_percent + "%");
+    } else {
+      $("#wifistrengthbox").hide();
+    }
+    $("#version").text("v" + json.info["firmware version"])
+  }
+
+  function refreshTimer() {
+      $("#timer").text(Math.floor(-1 * (Date.now() - timer - dataInterval) / 1000));
+      setTimeout(refreshTimer, 1000);
   }
 
   function refreshData() {
@@ -84,6 +92,7 @@ $(function() {
       dataType: "json",
       linktimeout: 2000
     }).done(function(json) {
+      timer = Date.now();
 			if (!json || !json.info || !json.data) {
 				alert('Received broken data, will retry.', 'warning')
 				dataInterval = 5 * 1000;
@@ -96,6 +105,7 @@ $(function() {
 			$("#liveAlertPlaceholder div.alert-warning").remove();
 			dataInterval = 60 * 1000;
     }).fail(function(xhr, status, errorThrown) {
+      timer = Date.now();
 			alert('Lost connection, retrying....', 'warning')
 			dataInterval = 5 * 1000;
       console.log("Error: " + errorThrown);
@@ -107,5 +117,5 @@ $(function() {
     });
   }
   refreshData();
-
+  refreshTimer();
 })

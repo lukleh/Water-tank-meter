@@ -4,11 +4,11 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<script src="jquery-3.6.0.min.js"></script>
-	<script src="bootstrap.min.js"></script>
-	<script src="sensor.js"></script>
-	<link href="sensor.css" rel="stylesheet">
-	<link href="bootstrap.min.css" rel="stylesheet">
+	<script src="/static/jquery-3.6.0.min.js"></script>
+	<script src="/static/bootstrap-5.1.3.min.js"></script>
+	<script src="/static/sensor.js"></script>
+	<link href="/static/sensor.css" rel="stylesheet">
+	<link href="/static/bootstrap-5.1.3.min.css" rel="stylesheet">
 	<title>Water tank meter</title>
 </head>
 
@@ -16,7 +16,19 @@
 	<div class="container">
 		<div class="row justify-content-md-center">
 			<div class="col col-lg-4">
-				<h1 class="text-center"> water tank </h1>
+				<div align="center">
+					<div class="row">
+						<div class="col-2">
+							<span></span>
+						</div>
+						<div class="col-8">
+							<h1 class="text-center">water tank</h1>
+						</div>
+						<div class="col-2 d-flex align-items-end">
+							<span id="version">v?</span>
+						</div>
+					</div>
+				</div>
 				<div class="vertical">
 					<div class="progress-bar">
 						<div class="progress-track">
@@ -26,18 +38,19 @@
 						</div>
 					</div>
 				</div>
-				<div class="progress mb-2" style="height: 25px;">
+				<div id="wifistrengthbox" class="progress mb-2" style="height: 25px;">
 					<div id="wifistrength" class="progress-bar bg-success" role="progressbar" style="width: 1%" aria-valuenow="1" aria-valuemin="0" aria-valuemax="100"></div>
 				</div>
 				<div id="liveAlertPlaceholder"></div>
 				<div align="center">
-					<div class="row">
-						<div class="col">
+					<div class="row align-items-center">
+						<div class="col pe-0">
 							<div class="d-grid gap-2">
 								<button id="togglesetup" class="btn btn-secondary" type="button" data-bs-toggle="modal" data-bs-target="#setupModal">Setup</button>
 							</div>
 						</div>
-						<div class="col">
+						<div id="timer" class="col-2 text-center ps-0 pe-0">??</div>
+						<div class="col ps-0">
 							<div class="d-grid gap-2">
 								<button id="info" class="btn btn-secondary" type="button" data-bs-toggle="modal" data-bs-target="#infoModal">Info</button>
 							</div>
@@ -81,6 +94,10 @@
 										<input type="text" name="wifi password" class="form-control" id="wifi_password" placeholder="Password">
 									</div>
 									<div class="form-group">
+										<label for="sensor_name">WIFI password</label>
+										<input type="text" name="sensor name" class="form-control" id="sensor_name" placeholder="Name of this sensor">
+									</div>
+									<div class="form-group">
 										<label for="sensor_height_cm">Sensor height</label>
 										<input type="text" name="sensor distance" class="form-control" id="sensor_height_cm" aria-describedby="WIFI name" placeholder="hight in cm">
 										<small id="sensor_height_cmHelp" class="form-text text-muted">How high is the sensor from the bottom of the tank in centimeter</small>
@@ -102,7 +119,7 @@
 				<div class="mt-2">
 					<table id="historyTable" class="table table-striped table-bordered">
 						<tr>
-							<th>time</th>
+							<th>hours ago</th>
 							<th>distance</th>
 							<th>volume</th>
 						</tr>
