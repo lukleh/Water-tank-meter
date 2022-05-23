@@ -24,7 +24,7 @@ def save():
     data = request.form
     return jsonify(data)
 
-@app.route('/<path:name>')
+@app.route('/static/<path:name>')
 def js_sensor(name):
     """
     static serve main js file

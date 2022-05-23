@@ -12,8 +12,7 @@ $(function() {
   $("#savesetup").on("click", function(e) {
 
     var form = $("#setup");
-    var actionUrl = form.attr('action');
-    console.log(form.serialize());
+
     $.ajax({
       type: "POST",
       url: "/save",
@@ -22,7 +21,7 @@ $(function() {
         $("p.setup-result").html(JSON.stringify(data));
       }
     }).done(function(json) {
-      alert('Sensor setup saved.', 'success')
+      alert('Sensor setup saved.', 'success');
     }).fail(function(xhr, status, errorThrown) {
       alert('Sensor setup could not save!', 'danger')
       console.log("Error: " + errorThrown);
@@ -32,6 +31,7 @@ $(function() {
       console.log('Waiting ' + (dataInterval / 1000) + ' seconds');
       setTimeout(refreshData, dataInterval);
     });
+
 		$("#setupModal").modal('hide');
   });
 
@@ -40,8 +40,9 @@ $(function() {
       $("#wifi_ssid").val(json.info["wifi name"]);
       $("#wifi_password").val(json.info["wifi password"]);
       $("#sensor_name").val(json.info["sensor name"]);
-      $("#sensor_height_cm").val(json.info["sensor height"]);
+      $("#sensor_distance_empty_cm").val(json.info["sensor distance empty cm"]);
       $("#tank_diameter_cm").val(json.info["tank diameter"]);
+      $("#sensor_distance_full_cm").val(json.info["sensor distance full cm"]);
     }
   }
 

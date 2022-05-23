@@ -25,7 +25,7 @@
 							<h1 class="text-center">water tank</h1>
 						</div>
 						<div class="col-2 d-flex align-items-end">
-							<span id="version">v?</span>
+							<a id="version" href="/update">v?</a>
 						</div>
 					</div>
 				</div>
@@ -87,25 +87,28 @@
 								<form id="setup">
 									<div class="form-group">
 										<label for="wifi_ssid">WIFI SSID</label>
-										<input type="text" name="wifi name" class="form-control" id="wifi_ssid" aria-describedby="WIFI name" placeholder="Enter WIFI name">
+										<input type="text" name="wifi name" class="form-control" id="wifi_ssid" placeholder="Enter WIFI name">
 									</div>
 									<div class="form-group">
 										<label for="wifi_password">WIFI password</label>
 										<input type="text" name="wifi password" class="form-control" id="wifi_password" placeholder="Password">
 									</div>
 									<div class="form-group">
-										<label for="sensor_name">WIFI password</label>
+										<label for="sensor_name">Sensor name</label>
 										<input type="text" name="sensor name" class="form-control" id="sensor_name" placeholder="Name of this sensor">
 									</div>
 									<div class="form-group">
-										<label for="sensor_height_cm">Sensor height</label>
-										<input type="text" name="sensor distance" class="form-control" id="sensor_height_cm" aria-describedby="WIFI name" placeholder="hight in cm">
-										<small id="sensor_height_cmHelp" class="form-text text-muted">How high is the sensor from the bottom of the tank in centimeter</small>
+										<label for="sensor_distance_empty_cm">Sensor empty tank distance</label>
+										<input type="text" name="sensor distance empty cm" class="form-control" id="sensor_distance_empty_cm" placeholder="empty tank sensor distance in cm" >
 									</div>
 									<div class="form-group">
 										<label for="tank_diameter_cm">Tank diameter</label>
-										<input type="text" name="tank diameter" class="form-control" id="tank_diameter_cm" aria-describedby="WIFI name" placeholder="diamenter in cm">
+										<input type="text" name="tank diameter" class="form-control" id="tank_diameter_cm" placeholder="diamenter in cm" >
 										<small id="tank_diameter_cmHelp" class="form-text text-muted">Diameter of the tank in centimenter</small>
+									</div>
+									<div class="form-group">
+										<label for="sensor_distance_full_cm">Sensor full tank distance</label>
+										<input type="text" name="sensor distance full cm" class="form-control" id="sensor_distance_full_cm" placeholder="full tank sensor distance in cm" >
 									</div>
 								</form>
 							</div>

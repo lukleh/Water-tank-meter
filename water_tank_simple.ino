@@ -10,11 +10,13 @@
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
 
-#define FIRMWARE_VERSION 1 // firmware version
+#define FIRMWARE_VERSION 1.1 // firmware version
 #define ULTRASOUND_ECHOPIN 13 // D7 blue  Pin to receive echo pulse TX
 #define ULTRASOUND_TRIGPIN 12 // D6 green Pin to send trigger pulse RX
 #define MEASUREMENT_COUNT 168
 #define CONFIG_SIZE 256
+#define SENSOR_MEASUREMENT_TRESHOLD 20
+
 
 AsyncWebServer server(80);
 
@@ -22,12 +24,14 @@ char wifi_ssid[32];
 char wifi_password[32];
 unsigned long current_distance_cm = 0;
 float average_distance_cm = 0;
+float sensor_measurement_threshold = SENSOR_MEASUREMENT_TRESHOLD;
 byte measurements[MEASUREMENT_COUNT] = {};
 int loop_count = 0;
 int lastTimeStep = 0;
 char sensor_name[32] = {"watertankmeter"};
 
-int sensor_height_cm = 0;
+int sensor_distance_empty_cm = 0;
+int sensor_distance_full_cm = sensor_measurement_threshold;
 int tank_diameter_cm = 0;
 bool connection_success = false;
 int current_hour = 0;
@@ -65,21 +69,21 @@ void storeMeasurement() {
 }
 
 int remainingDepth(int distance_cm) {
-  if (sensor_height_cm == 0) {
-    return 0;
-  }
-  return sensor_height_cm - distance_cm;
-}
-
-int calcPercentFull(int distance_cm) {
   if (distance_cm == 0) {
     return 0;
   }
-  return (remainingDepth(distance_cm) / (sensor_height_cm - 20.0)) * 100;
+  return sensor_distance_empty_cm - distance_cm;
+}
+
+int calcPercentFull(int distance_cm) {
+  if (distance_cm == 0 || (sensor_distance_empty_cm == 0 && sensor_distance_full_cm == 0)) {
+    return 0;
+  }
+  return (remainingDepth(distance_cm) / (float)(sensor_distance_empty_cm - sensor_distance_full_cm)) * 100;
 }
 
 float waterVolumeM3(int distance_cm) {
-  if (distance_cm == 0 || sensor_height_cm == 0 || tank_diameter_cm == 0) {
+  if (distance_cm == 0 || sensor_distance_empty_cm == 0 || tank_diameter_cm == 0) {
     return 0;
   }
   return 3.14 * (tank_diameter_cm / 2.0) * (tank_diameter_cm / 2.0) * remainingDepth(distance_cm) / (100 * 100 * 100);
@@ -110,7 +114,7 @@ int measureDistance() {
   raw_best = raw[0];
   for (int i = 0; i < 5; i++) {
     if (abs(raw_best - (raw_sum / 6.0)) > abs(raw[i] - (raw_sum / 6.0))) {
-      raw_best = raw[i];
+      raw_best = raw[i]; 
     }
   }
   return raw_best;
@@ -124,10 +128,12 @@ void handleData(AsyncWebServerRequest *request) {
   JsonObject jDoc = response->getRoot();
   JsonObject info = jDoc.createNestedObject("info");
   info["volume"] = waterVolumeM3(average_distance_cm);
-  info["percent full"] = calcPercentFull(average_distance_cm);
+  info["percent full"] = min(0, min(100, calcPercentFull(average_distance_cm)));
+  info["percent full unfiltered"] = calcPercentFull(average_distance_cm);
   info["average distance"] = int(average_distance_cm);
   info["current distance"] = current_distance_cm;
-  info["sensor height"] = sensor_height_cm;
+  info["sensor distance empty cm"] = sensor_distance_empty_cm;
+  info["sensor distance full cm"] = sensor_distance_full_cm;
   info["tank diameter"] = tank_diameter_cm;
   info["firmware version"] = FIRMWARE_VERSION;
   info["sensor name"] = sensor_name;
@@ -181,8 +187,10 @@ void handleSave(AsyncWebServerRequest *request) {
     } else if (request->argName(i) == "sensor name") {
       wifi_unchanged = wifi_unchanged && strcmp(sensor_name, request->arg(i).c_str()) == 0;
       strcpy(sensor_name, request->arg(i).c_str());
-    } else if (request->argName(i) == "sensor distance") {
-      sensor_height_cm = request->arg(i).toInt();
+    } else if (request->argName(i) == "sensor distance full cm") {
+      sensor_distance_full_cm = request->arg(i).toInt();
+    } else if (request->argName(i) == "sensor distance empty cm") {
+      sensor_distance_empty_cm = request->arg(i).toInt();
     } else if (request->argName(i) == "tank diameter") {
       tank_diameter_cm = request->arg(i).toInt();
     }
@@ -218,18 +226,19 @@ void loadConfig() {
     if (!doc["sensor name"].isNull()) {
       strcpy(sensor_name, doc["sensor name"]);
     }
-    sensor_height_cm = doc["sensor height cm"];
+    if (!doc["sensor distance empty cm"].isNull()) {
+      sensor_distance_empty_cm = doc["sensor distance empty cm"];
+    }
+    if (!doc["sensor distance full cm"].isNull()) {
+      sensor_distance_full_cm = doc["sensor distance full cm"];
+    }
     tank_diameter_cm = doc["tank diameter cm"];
     connection_success = doc["connection success"];
     Serial.print("loaded config: ");
     serializeJson(doc, Serial);
     Serial.println();
   } else {
-    Serial.println("not found config file, using dummy defaults");
-    sensor_height_cm = 0;
-    tank_diameter_cm = 0;
-    strcpy(wifi_ssid, "");
-    strcpy(wifi_password, "");
+    Serial.println("config file not found");
   }
 }
 
@@ -238,7 +247,8 @@ void saveConfig() {
   doc["wifi ssid"] = wifi_ssid;
   doc["wifi password"] = wifi_password;
   doc["sensor name"] = sensor_name;
-  doc["sensor height cm"] = sensor_height_cm;
+  doc["sensor distance empty cm"] = sensor_distance_empty_cm;
+  doc["sensor distance full cm"] = sensor_distance_full_cm;
   doc["tank diameter cm"] = tank_diameter_cm;
   doc["connection success"] = connection_success;
   Serial.print("save config:");
@@ -287,7 +297,7 @@ void checkWifi() {
      if in AP mode, and last WIFI connection was successful, try to reconnect
   */
   if ((wifi_get_opmode() == 2) && connection_success) {
-    if (getNow() - lastWificheck > 60000) {
+    if (getNow() - lastWificheck > 300000) {
       Serial.println("Trying to reconnect to the last known WIFI network");
       lastWificheck = getNow();
       connectWifi();
