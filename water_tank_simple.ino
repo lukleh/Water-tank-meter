@@ -1,9 +1,9 @@
 #define DYNAMIC_JSON_DOCUMENT_SIZE 16384
+#include <AsyncJson.h>
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncElegantOTA.h>
-#include "AsyncJson.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <StreamUtils.h>
@@ -128,7 +128,7 @@ void handleData(AsyncWebServerRequest *request) {
   JsonObject jDoc = response->getRoot();
   JsonObject info = jDoc.createNestedObject("info");
   info["volume"] = waterVolumeM3(average_distance_cm);
-  info["percent full"] = min(0, min(100, calcPercentFull(average_distance_cm)));
+  info["percent full"] = max(0, min(100, calcPercentFull(average_distance_cm)));
   info["percent full unfiltered"] = calcPercentFull(average_distance_cm);
   info["average distance"] = int(average_distance_cm);
   info["current distance"] = current_distance_cm;
@@ -136,6 +136,7 @@ void handleData(AsyncWebServerRequest *request) {
   info["sensor distance full cm"] = sensor_distance_full_cm;
   info["tank diameter"] = tank_diameter_cm;
   info["firmware version"] = FIRMWARE_VERSION;
+  info["board name"] = ARDUINO_BOARD;
   info["sensor name"] = sensor_name;
   info["WIFI"] = (wifi_get_opmode() == 2) ? "AP" : "Station";
   info["your IP"] = request->client()->remoteIP().toString();
