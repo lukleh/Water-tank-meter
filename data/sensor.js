@@ -63,7 +63,7 @@ $(function() {
     for (const element of json.data) {
       $("#historyGraph").append(`
         <div class="row">
-          <div class="col-2 pe-0">
+          <div class="col-2 pe-0 ps-4">
             <label>${element.p}%</label>
           </div>
           <div class="col-10 ps-0">
