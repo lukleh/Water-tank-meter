@@ -10,7 +10,7 @@
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
 
-#define FIRMWARE_VERSION 1.1 // firmware version
+#define FIRMWARE_VERSION 1.2 // firmware version
 #define ULTRASOUND_ECHOPIN 13 // D7 blue  Pin to receive echo pulse TX
 #define ULTRASOUND_TRIGPIN 12 // D6 green Pin to send trigger pulse RX
 #define MEASUREMENT_COUNT 168
@@ -82,6 +82,10 @@ int calcPercentFull(int distance_cm) {
   return (remainingDepth(distance_cm) / (float)(sensor_distance_empty_cm - sensor_distance_full_cm)) * 100;
 }
 
+int calcPercentFullCapped(int percent) {
+  return max(0, min(100, percent));
+}
+
 float waterVolumeM3(int distance_cm) {
   if (distance_cm == 0 || sensor_distance_empty_cm == 0 || tank_diameter_cm == 0) {
     return 0;
@@ -128,7 +132,7 @@ void handleData(AsyncWebServerRequest *request) {
   JsonObject jDoc = response->getRoot();
   JsonObject info = jDoc.createNestedObject("info");
   info["volume"] = waterVolumeM3(average_distance_cm);
-  info["percent full"] = max(0, min(100, calcPercentFull(average_distance_cm)));
+  info["percent full"] = calcPercentFullCapped(calcPercentFull(average_distance_cm));
   info["percent full unfiltered"] = calcPercentFull(average_distance_cm);
   info["average distance"] = int(average_distance_cm);
   info["current distance"] = current_distance_cm;
@@ -139,6 +143,7 @@ void handleData(AsyncWebServerRequest *request) {
   info["board name"] = ARDUINO_BOARD;
   info["sensor name"] = sensor_name;
   info["WIFI"] = (wifi_get_opmode() == 2) ? "AP" : "Station";
+  info["WIFI mode"] = wifi_get_opmode();
   info["your IP"] = request->client()->remoteIP().toString();
   info["my IP"] =  WiFi.localIP().toString();
   info["uptime"] = getNow();
@@ -163,6 +168,7 @@ void handleData(AsyncWebServerRequest *request) {
     }
     JsonObject measurement = data.createNestedObject();
     measurement["i"] = i;
+    measurement["p"] = calcPercentFullCapped(calcPercentFull(measurements[i]));
     measurement["v"] = round(waterVolumeM3(measurements[i]) * 100) / 100.0;
     measurement["d"] = round(measurements[i] * 100) / 100.0;
   }
@@ -214,6 +220,23 @@ void handleRestart(AsyncWebServerRequest *request) {
   ESP.restart();
 }
 
+
+String processor(const String& var)
+{
+  bool have_internet = wifi_get_opmode() == WIFI_STA;
+  if(var == "JQUERY_TEMPLATE") {
+    return have_internet ? F("src=\"https://code.jquery.com/jquery-3.6.0.min.js\"") : F("src=\"/static/jquery-3.6.0.min.js\"");
+  } else if (var == "BOOTSTRAP_JS_TEMPLATE") {
+    return have_internet ? F("src=\"https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.min.js\" integrity=\"sha384-QJHtvGhmr9XOIpI6YVutG+2QOK9T+ZnN4kzFN1RtK3zEFEIsxhlmWl5/YESvpZ13\" crossorigin=\"anonymous\"") : F("src=\"/static/bootstrap-5.1.3.min.js\"");
+  } else if (var == "BOOTSTRAP_CSS_TEMPLATE") {
+    return have_internet ? F("href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css\" rel=\"stylesheet\" integrity=\"sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3\" crossorigin=\"anonymous\"") : F("href=\"/static/bootstrap-5.1.3.min.css\" rel=\"stylesheet\"");
+  }
+  return String();
+}
+
+void handleRoot(AsyncWebServerRequest *request) {
+  request->send(LittleFS, "/index.html", String(), false, processor);
+}
 
 void loadConfig() {
   Serial.println("loading config");
@@ -325,6 +348,7 @@ void flashInfo() {
   }
 }
 
+
 void setup()
 {
   Serial.begin(9600);
@@ -350,11 +374,16 @@ void setup()
     Serial.println("Filesystem NOT mounted");
   }
 
-  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html");
   server.serveStatic("/static", LittleFS, "/");
   server.on("/data", HTTP_GET, handleData);
   server.on("/save", HTTP_POST, handleSave);
   server.on("/restart", HTTP_GET, handleRestart);
+//  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html").setTemplateProcessor(processor);
+  server.serveStatic("/favicon.ico", LittleFS, "/favicon.ico");
+//  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html").setTemplateProcessor(processor);
+  server.on("/", HTTP_GET, handleRoot);
+  
+ 
   AsyncElegantOTA.begin(&server);
   server.begin();
   Serial.println("Web server started");

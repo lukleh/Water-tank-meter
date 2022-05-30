@@ -59,10 +59,24 @@ $(function() {
   }
 
   function updateHistory(json) {
-    $("#historyTable tr").slice(1).remove();
+    $("#historyGraph div").remove();
     for (const element of json.data) {
-			$("#historyTable").append(`<tr><td>${element.i}</td><td>${element.d}cm</td><td>${element.v}m<sup>3</sup></td></tr>`);
+      $("#historyGraph").append(`
+        <div class="row">
+          <div class="col-md-2">
+            <label>${element.p}%</label>
+          </div>
+          <div class="col-md-10">
+            <div class="progress" style="height: 23px;">
+              <div class="progress-bar" role="progressbar" style="width: ${element.p}%;" aria-valuenow="${element.p}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+          </div>
+        </div>`);
     }
+    $("#historyTable tr").slice(1).remove();
+   for (const element of json.data) {
+     $("#historyTable").append(`<tr><td>${element.i}</td><td>${element.d}cm</td><td>${element.v}m<sup>3</sup></td></tr>`);
+   }
   }
 
 	function updateInfo(json) {
