@@ -220,24 +220,6 @@ void handleRestart(AsyncWebServerRequest *request) {
   ESP.restart();
 }
 
-
-String processor(const String& var)
-{
-  bool have_internet = wifi_get_opmode() == WIFI_STA;
-  if(var == "JQUERY_TEMPLATE") {
-    return have_internet ? F("src=\"https://code.jquery.com/jquery-3.6.0.min.js\"") : F("src=\"/static/jquery-3.6.0.min.js\"");
-  } else if (var == "BOOTSTRAP_JS_TEMPLATE") {
-    return have_internet ? F("src=\"https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.min.js\" integrity=\"sha384-QJHtvGhmr9XOIpI6YVutG+2QOK9T+ZnN4kzFN1RtK3zEFEIsxhlmWl5/YESvpZ13\" crossorigin=\"anonymous\"") : F("src=\"/static/bootstrap-5.1.3.min.js\"");
-  } else if (var == "BOOTSTRAP_CSS_TEMPLATE") {
-    return have_internet ? F("href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css\" rel=\"stylesheet\" integrity=\"sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3\" crossorigin=\"anonymous\"") : F("href=\"/static/bootstrap-5.1.3.min.css\" rel=\"stylesheet\"");
-  }
-  return String();
-}
-
-void handleRoot(AsyncWebServerRequest *request) {
-  request->send(LittleFS, "/index.html", String(), false, processor);
-}
-
 void loadConfig() {
   Serial.println("loading config");
   StaticJsonDocument<CONFIG_SIZE> doc;
@@ -374,16 +356,12 @@ void setup()
     Serial.println("Filesystem NOT mounted");
   }
 
-  server.serveStatic("/static", LittleFS, "/");
   server.on("/data", HTTP_GET, handleData);
   server.on("/save", HTTP_POST, handleSave);
   server.on("/restart", HTTP_GET, handleRestart);
-//  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html").setTemplateProcessor(processor);
-  server.serveStatic("/favicon.ico", LittleFS, "/favicon.ico");
-//  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html").setTemplateProcessor(processor);
-  server.on("/", HTTP_GET, handleRoot);
+  server.serveStatic("/static", LittleFS, "/");
+  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html");
   
- 
   AsyncElegantOTA.begin(&server);
   server.begin();
   Serial.println("Web server started");

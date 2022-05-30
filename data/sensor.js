@@ -63,10 +63,10 @@ $(function() {
     for (const element of json.data) {
       $("#historyGraph").append(`
         <div class="row">
-          <div class="col-md-2">
+          <div class="col-2 pe-0">
             <label>${element.p}%</label>
           </div>
-          <div class="col-md-10">
+          <div class="col-10 ps-0">
             <div class="progress" style="height: 23px;">
               <div class="progress-bar" role="progressbar" style="width: ${element.p}%;" aria-valuenow="${element.p}" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
