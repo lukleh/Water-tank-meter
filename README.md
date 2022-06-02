@@ -1,8 +1,8 @@
 # Water tank meter
 
-<img src="imgs/screenshot_mobile.jpg" width=50% height=50%>
+ESP8266 based project for measuring water level in tank using ultrasonic sensor complete with 3D printed enclosure accesible through web interface.
 
-ESP8266 based project for measuring water level in tank using ultrasonic sensor complete with 3D printed enclosure accesible through web interface
+<img src="imgs/screenshot_mobile.jpg" width=50% height=50%>
 
 ## Dependencies
 * https://arduino-esp8266.readthedocs.io/en/latest/installing.html
