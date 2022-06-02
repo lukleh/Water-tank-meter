@@ -23,7 +23,7 @@ ESP8266 based project for measuring water level in tank using ultrasonic sensor 
 * MaxLink omnidirectional dipole antenna 10dBi 2,4GHz, RSMA 01-VS-MDB10
 * pigtail  
 * 4 M3 threaded inserts
-* 4 M3 screws
+* 4 M3x10 screws
 * cables for wiring
 * solder if needed
 
