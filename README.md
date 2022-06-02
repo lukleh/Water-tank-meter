@@ -1,7 +1,6 @@
 # Water tank meter
 
 <img src="imgs/screenshot_mobile.jpg" width=50% height=50%>
-![Mobile screenshot](imgs/screenshot_mobile.jpg)
 
 ESP8266 based project for measuring water level in tank using ultrasonic sensor complete with 3D printed enclosure accesible through web interface
 
@@ -18,7 +17,15 @@ ESP8266 based project for measuring water level in tank using ultrasonic sensor 
 
 
 ## Electronics parts
-* Wemos D1 mini pro
+* WeMos D1 Mini Pro 16MB ESP8266 WiFi modul
+* Logic level shifter
+* JSN-SR04T 
+* MaxLink omnidirectional dipole antenna 10dBi 2,4GHz, RSMA 01-VS-MDB10
+* pigtail  
+* 4 M3 threaded inserts
+* 4 M3 screws
+* cables for wiring
+* solder if needed
 
 
 ## Setup
