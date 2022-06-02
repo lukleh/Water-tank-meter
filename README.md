@@ -17,11 +17,12 @@ ESP8266 based project for measuring water level in tank using ultrasonic sensor 
 
 
 ## Electronics parts
-* WeMos D1 Mini Pro 16MB ESP8266 WiFi modul
+* WeMos D1 Mini Pro 16MB ESP8266 WiFi modul (pro model to attach pigtail+antenna)
 * Logic level shifter
 * JSN-SR04T 
 * MaxLink omnidirectional dipole antenna 10dBi 2,4GHz, RSMA 01-VS-MDB10
-* pigtail  
+* pigtail
+* USB charger - micro usb
 * 4 M3 threaded inserts
 * 4 M3x10 screws
 * cables for wiring
