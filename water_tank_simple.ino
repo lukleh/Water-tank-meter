@@ -215,9 +215,16 @@ void handleSave(AsyncWebServerRequest *request) {
 }
 
 void handleRestart(AsyncWebServerRequest *request) {
-  Serial.println("Handle restart");
   request->send(200, "application/json", "restarting");
   ESP.restart();
+}
+
+void handleRoot(AsyncWebServerRequest *request) {
+  if (wifi_get_opmode() == WIFI_STA) {
+    request->send(LittleFS, "/index_internet.html", "text/html");
+  } else {
+    request->send(LittleFS, "/index_local.html", "text/html");
+  }
 }
 
 void loadConfig() {
@@ -360,7 +367,9 @@ void setup()
   server.on("/save", HTTP_POST, handleSave);
   server.on("/restart", HTTP_GET, handleRestart);
   server.serveStatic("/static", LittleFS, "/");
-  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html");
+  server.serveStatic("/favicon.ico", LittleFS, "/favicon.ico");
+//  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html");
+  server.on("/", HTTP_GET, handleRoot);
   
   AsyncElegantOTA.begin(&server);
   server.begin();
