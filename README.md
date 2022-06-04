@@ -4,7 +4,7 @@ ESP8266 based project for measuring water level in tank using ultrasonic sensor 
 
 <img src="imgs/screenshot_mobile.jpg" width=50% height=50%>
 
-![Assembled box](imgs/assembled_box.jpg")
+![Assembled box](imgs/assembled_box.jpg)
 
 ## Dependencies
 * https://arduino-esp8266.readthedocs.io/en/latest/installing.html
