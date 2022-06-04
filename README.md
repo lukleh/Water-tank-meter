@@ -38,6 +38,7 @@ ESP8266 based project for measuring water level in tank using ultrasonic sensor 
 * connect and setup WIFI and tank dimensions and sensor distances
 * NOTICE: minimum full distance is 20cm - which is the minimum distance the sensor can measure
 * Better to keep the sensor at least 30cm above the maximum water level
+* The logic of distances on picture below
 
 
 ![Distances logic](imgs/logic.png)
