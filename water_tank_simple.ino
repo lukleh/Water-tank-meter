@@ -1,4 +1,5 @@
 #define DYNAMIC_JSON_DOCUMENT_SIZE 16384
+
 #include <AsyncJson.h>
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
@@ -10,11 +11,11 @@
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
 
-#define FIRMWARE_VERSION 1.2 // firmware version
+#define FIRMWARE_VERSION 1.4 // firmware version
 #define ULTRASOUND_ECHOPIN 13 // D7 blue  Pin to receive echo pulse TX
 #define ULTRASOUND_TRIGPIN 12 // D6 green Pin to send trigger pulse RX
 #define MEASUREMENT_COUNT 168
-#define CONFIG_SIZE 256
+#define CONFIG_SIZE 512
 #define SENSOR_MEASUREMENT_TRESHOLD 20
 
 
@@ -118,7 +119,7 @@ int measureDistance() {
   raw_best = raw[0];
   for (int i = 0; i < 5; i++) {
     if (abs(raw_best - (raw_sum / 6.0)) > abs(raw[i] - (raw_sum / 6.0))) {
-      raw_best = raw[i]; 
+      raw_best = raw[i];
     }
   }
   return raw_best;
@@ -146,6 +147,7 @@ void handleData(AsyncWebServerRequest *request) {
   info["WIFI mode"] = wifi_get_opmode();
   info["your IP"] = request->client()->remoteIP().toString();
   info["my IP"] =  WiFi.localIP().toString();
+  info["MAC address"] =  WiFi.macAddress();
   info["uptime"] = getNow();
   info["loop number"] = loop_count;
   info["wifi name"] = wifi_ssid;
@@ -220,6 +222,10 @@ void handleRestart(AsyncWebServerRequest *request) {
 }
 
 void handleRoot(AsyncWebServerRequest *request) {
+  /*
+     need to an ugly hack to select index.html
+     templating breaks the file (maybe a network issue)
+  */
   if (wifi_get_opmode() == WIFI_STA) {
     request->send(LittleFS, "/index_internet.html", "text/html");
   } else {
@@ -355,8 +361,10 @@ void setup()
 
   loadConfig();
   connectWifi();
-
+  Serial.print("ESP Board MAC Address:  ");
+  Serial.println(WiFi.macAddress());
   MDNS.begin(sensor_name);
+  Serial.println("mDNS responder started");
   if (LittleFS.begin()) {
     Serial.println("Filesystem mounted");
   } else {
@@ -368,9 +376,8 @@ void setup()
   server.on("/restart", HTTP_GET, handleRestart);
   server.serveStatic("/static", LittleFS, "/");
   server.serveStatic("/favicon.ico", LittleFS, "/favicon.ico");
-//  server.serveStatic("/", LittleFS, "/").setDefaultFile("/index.html");
   server.on("/", HTTP_GET, handleRoot);
-  
+
   AsyncElegantOTA.begin(&server);
   server.begin();
   Serial.println("Web server started");
@@ -380,7 +387,7 @@ void setup()
   while (dir.next()) {
     Serial.printf("%s - %d\n", dir.fileName().c_str(), dir.fileSize());
   }
-
+  MDNS.addService("http", "tcp", 80);
   Serial.println("Setup finished");
 
   flashInfo();
