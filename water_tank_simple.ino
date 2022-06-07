@@ -11,7 +11,7 @@
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
 
-#define FIRMWARE_VERSION 1.4 // firmware version
+#define FIRMWARE_VERSION 1.5 // firmware version
 #define ULTRASOUND_ECHOPIN 13 // D7 blue  Pin to receive echo pulse TX
 #define ULTRASOUND_TRIGPIN 12 // D6 green Pin to send trigger pulse RX
 #define MEASUREMENT_COUNT 168
@@ -23,10 +23,10 @@ AsyncWebServer server(80);
 
 char wifi_ssid[32];
 char wifi_password[32];
-unsigned long current_distance_cm = 0;
-float average_distance_cm = 0;
+double current_distance_cm = 0;
+double average_distance_cm = 0;
 float sensor_measurement_threshold = SENSOR_MEASUREMENT_TRESHOLD;
-byte measurements[MEASUREMENT_COUNT] = {};
+double measurements[MEASUREMENT_COUNT] = {};
 int loop_count = 0;
 int lastTimeStep = 0;
 char sensor_name[32] = {"watertankmeter"};
@@ -38,7 +38,7 @@ bool connection_success = false;
 int current_hour = 0;
 int lastWificheck = 0;
 
-unsigned long last_distance_cm = 0;
+double last_distance_cm = 0;
 uint32_t last_freeheap = 0;
 
 
@@ -48,7 +48,7 @@ time_t getNow() {
 
 void calc_average_distance() {
   if (average_distance_cm == 0) {
-    average_distance_cm = float(current_distance_cm);
+    average_distance_cm = current_distance_cm;
   } else {
     average_distance_cm = (average_distance_cm * 59 + current_distance_cm) / 60.0;
   }
@@ -66,51 +66,51 @@ void storeMeasurement() {
       measurements[i] = measurements[i - 1];
     }
   }
-  measurements[0] = round(average_distance_cm);
+  measurements[0] = average_distance_cm;
 }
 
-int remainingDepth(int distance_cm) {
+double remainingDepth(double distance_cm) {
   if (distance_cm == 0) {
     return 0;
   }
   return sensor_distance_empty_cm - distance_cm;
 }
 
-int calcPercentFull(int distance_cm) {
+int calcPercentFull(double distance_cm) {
   if (distance_cm == 0 || (sensor_distance_empty_cm == 0 && sensor_distance_full_cm == 0)) {
     return 0;
   }
-  return (remainingDepth(distance_cm) / (float)(sensor_distance_empty_cm - sensor_distance_full_cm)) * 100;
+  return (remainingDepth(distance_cm) / (double)(sensor_distance_empty_cm - sensor_distance_full_cm)) * 100;
 }
 
 int calcPercentFullCapped(int percent) {
   return max(0, min(100, percent));
 }
 
-float waterVolumeM3(int distance_cm) {
+double waterVolumeM3(double distance_cm) {
   if (distance_cm == 0 || sensor_distance_empty_cm == 0 || tank_diameter_cm == 0) {
     return 0;
   }
   return 3.14 * (tank_diameter_cm / 2.0) * (tank_diameter_cm / 2.0) * remainingDepth(distance_cm) / (100 * 100 * 100);
 }
 
-unsigned long rawDistance() {
+double rawDistance() {
   delay(100);
-  unsigned long distance_cm;
+  double distance_cm;
   digitalWrite(ULTRASOUND_TRIGPIN, LOW); // Set the trigger pin to low for 2uS
   delayMicroseconds(2);
   digitalWrite(ULTRASOUND_TRIGPIN, HIGH); // Send a 10uS high to trigger ranging
   delayMicroseconds(20);
   digitalWrite(ULTRASOUND_TRIGPIN, LOW); // Send pin low again
-  distance_cm = pulseIn(ULTRASOUND_ECHOPIN, HIGH, 26000) / 58; // Read in times pulse
+  distance_cm = pulseIn(ULTRASOUND_ECHOPIN, HIGH, 26000) / 57.5; // Read in times pulse
   return distance_cm;
 }
 
 
-int measureDistance() {
-  int raw_sum = 0;
-  int raw_best = 0;
-  int raw[5] = {};
+double measureDistance() {
+  double raw_sum = 0;
+  double raw_best = 0;
+  double raw[5] = {};
   for (int i = 0; i < 5; i++) {
     raw[i] = rawDistance();
     raw_sum += raw[i];
@@ -135,7 +135,7 @@ void handleData(AsyncWebServerRequest *request) {
   info["volume"] = waterVolumeM3(average_distance_cm);
   info["percent full"] = calcPercentFullCapped(calcPercentFull(average_distance_cm));
   info["percent full unfiltered"] = calcPercentFull(average_distance_cm);
-  info["average distance"] = int(average_distance_cm);
+  info["average distance"] = average_distance_cm;
   info["current distance"] = current_distance_cm;
   info["sensor distance empty cm"] = sensor_distance_empty_cm;
   info["sensor distance full cm"] = sensor_distance_full_cm;
@@ -171,8 +171,8 @@ void handleData(AsyncWebServerRequest *request) {
     JsonObject measurement = data.createNestedObject();
     measurement["i"] = i;
     measurement["p"] = calcPercentFullCapped(calcPercentFull(measurements[i]));
-    measurement["v"] = round(waterVolumeM3(measurements[i]) * 100) / 100.0;
-    measurement["d"] = round(measurements[i] * 100) / 100.0;
+    measurement["v"] = round(waterVolumeM3(measurements[i]) * 1000) / 1000.0;
+    measurement["d"] = round(measurements[i] * 10) / 10.0;
   }
   response->setLength();
   request->send(response);
@@ -404,7 +404,7 @@ void loop()
   if (loop_count % 100 == 0 || abs((int)current_distance_cm - (int)last_distance_cm) > 10 || ( abs((int)last_freeheap - (int)ESP.getFreeHeap()) > 1000)) {
     last_distance_cm = current_distance_cm;
     last_freeheap = ESP.getFreeHeap();
-    Serial.printf("ts: %lld distance: %lucm avg distance: %.2fcm free heap: %d\n", getNow(), current_distance_cm, average_distance_cm, ESP.getFreeHeap());
+    Serial.printf("ts: %lld distance: %fcm avg distance: %.2fcm free heap: %d\n", getNow(), current_distance_cm, average_distance_cm, ESP.getFreeHeap());
   }
   storeMeasurement();
   loop_count++;
