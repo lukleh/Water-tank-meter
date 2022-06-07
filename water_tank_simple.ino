@@ -76,15 +76,15 @@ double remainingDepth(double distance_cm) {
   return sensor_distance_empty_cm - distance_cm;
 }
 
-int calcPercentFull(double distance_cm) {
+double calcPercentFull(double distance_cm) {
   if (distance_cm == 0 || (sensor_distance_empty_cm == 0 && sensor_distance_full_cm == 0)) {
     return 0;
   }
   return (remainingDepth(distance_cm) / (double)(sensor_distance_empty_cm - sensor_distance_full_cm)) * 100;
 }
 
-int calcPercentFullCapped(int percent) {
-  return max(0, min(100, percent));
+int calcPercentFullCapped(double percent) {
+  return max(0, min(100, (int)round(percent)));
 }
 
 double waterVolumeM3(double distance_cm) {
