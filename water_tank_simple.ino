@@ -11,7 +11,7 @@
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
 
-#define FIRMWARE_VERSION 1.5 // firmware version
+#define FIRMWARE_VERSION 1.6 // firmware version
 #define ULTRASOUND_ECHOPIN 13 // D7 blue  Pin to receive echo pulse TX
 #define ULTRASOUND_TRIGPIN 12 // D6 green Pin to send trigger pulse RX
 #define MEASUREMENT_COUNT 168
@@ -34,7 +34,6 @@ char sensor_name[32] = {"watertankmeter"};
 int sensor_distance_empty_cm = 0;
 int sensor_distance_full_cm = sensor_measurement_threshold;
 int tank_diameter_cm = 0;
-bool connection_success = false;
 int current_hour = 0;
 int lastWificheck = 0;
 
@@ -127,7 +126,7 @@ double measureDistance() {
 
 
 void handleData(AsyncWebServerRequest *request) {
-  Serial.println("Handle data");
+  Serial.println("HTTP GET /data");
   AsyncJsonResponse * response = new AsyncJsonResponse();
   response->addHeader("Server", "ESP Async Web Server");
   JsonObject jDoc = response->getRoot();
@@ -155,7 +154,6 @@ void handleData(AsyncWebServerRequest *request) {
   if (wifi_get_opmode() == 1) {
     info["signal strength dBi"] = WiFi.RSSI();
   }
-  info["connection success"] = connection_success;
   info["wifi opmode"] = wifi_get_opmode();
   info["free heap"] = ESP.getFreeHeap();
   Dir dir = LittleFS.openDir("/");
@@ -180,7 +178,7 @@ void handleData(AsyncWebServerRequest *request) {
 
 
 void handleSave(AsyncWebServerRequest *request) {
-  Serial.println("Handle save");
+  Serial.println("HTTP POST /save");
   String response;
   bool wifi_unchanged = true;
   DynamicJsonDocument jDoc(256);
@@ -217,6 +215,7 @@ void handleSave(AsyncWebServerRequest *request) {
 }
 
 void handleRestart(AsyncWebServerRequest *request) {
+  Serial.println("HTTP GET /restart");
   request->send(200, "application/json", "restarting");
   ESP.restart();
 }
@@ -226,6 +225,7 @@ void handleRoot(AsyncWebServerRequest *request) {
      need to an ugly hack to select index.html
      templating breaks the file (maybe a network issue)
   */
+  Serial.println("HTTP GET /");
   if (wifi_get_opmode() == WIFI_STA) {
     request->send(LittleFS, "/index_internet.html", "text/html");
   } else {
@@ -252,7 +252,6 @@ void loadConfig() {
       sensor_distance_full_cm = doc["sensor distance full cm"];
     }
     tank_diameter_cm = doc["tank diameter cm"];
-    connection_success = doc["connection success"];
     Serial.print("loaded config: ");
     serializeJson(doc, Serial);
     Serial.println();
@@ -269,7 +268,6 @@ void saveConfig() {
   doc["sensor distance empty cm"] = sensor_distance_empty_cm;
   doc["sensor distance full cm"] = sensor_distance_full_cm;
   doc["tank diameter cm"] = tank_diameter_cm;
-  doc["connection success"] = connection_success;
   Serial.print("save config:");
   serializeJson(doc, Serial);
   Serial.println();
@@ -286,8 +284,12 @@ void makeSoftAP() {
   WiFi.softAP(sensor_name);
 }
 
+boolean haveWifiCredentials() {
+  return !(strcmp(wifi_ssid, "") == 0 || !wifi_ssid || strcmp(wifi_ssid, "null") == 0 || strcmp(wifi_password, "") == 0 || !wifi_password || strcmp(wifi_password, "null") == 0);
+}
+
 void connectWifi() {
-  if (strcmp(wifi_ssid, "") == 0 || !wifi_ssid || strcmp(wifi_ssid, "null") == 0 || strcmp(wifi_password, "") == 0 || !wifi_password || strcmp(wifi_password, "null") == 0) {
+  if (!haveWifiCredentials()) {
     Serial.println("empty wifi credentials, turning to softAP");
     makeSoftAP();
     return;
@@ -299,15 +301,10 @@ void connectWifi() {
     Serial.println("WiFi failed, switching to AP");
     break;
   }
-
+  
   if (WiFi.status() != WL_CONNECTED) {
-    connection_success = false;
     makeSoftAP();
     return;
-  }
-  if (!connection_success) {
-    connection_success = true;
-    saveConfig();
   }
 }
 
@@ -315,7 +312,7 @@ void checkWifi() {
   /*
      if in AP mode, and last WIFI connection was successful, try to reconnect
   */
-  if ((wifi_get_opmode() == 2) && connection_success) {
+  if (wifi_get_opmode() == 2 && haveWifiCredentials()) {
     if (getNow() - lastWificheck > 300000) {
       Serial.println("Trying to reconnect to the last known WIFI network");
       lastWificheck = getNow();

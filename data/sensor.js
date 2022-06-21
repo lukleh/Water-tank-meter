@@ -2,8 +2,9 @@ $(function() {
   console.log("ready!");
   var dataInterval = 60 * 1000;
   var timer = Date.now();
+
   function alert(message, type) {
-		$("#liveAlertPlaceholder").empty();
+    $("#liveAlertPlaceholder").empty();
     var wrapper = document.createElement('div')
     wrapper.innerHTML = '<div class="alert alert-' + type + ' alert-dismissible fade show" role="alert">' + message + '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>'
     $("#liveAlertPlaceholder").append(wrapper)
@@ -32,7 +33,7 @@ $(function() {
       setTimeout(refreshData, dataInterval);
     });
 
-		$("#setupModal").modal('hide');
+    $("#setupModal").modal('hide');
   });
 
   function populateForm(json) {
@@ -53,7 +54,7 @@ $(function() {
       $("div.progress-fill").css("height", 0 + "%");
     } else {
       $("#tanktext").text(json.info["percent full"] + "%");
-  		$("#tanktextVol").html(json.info["volume"].toFixed(2) + "m<sup>3</sup>");
+      $("#tanktextVol").html(json.info["volume"].toFixed(2) + "m<sup>3</sup>");
       $("div.progress-fill").css("height", json.info["percent full"] + "%");
     }
   }
@@ -74,12 +75,18 @@ $(function() {
         </div>`);
     }
     $("#historyTable tr").slice(1).remove();
-   for (const element of json.data) {
-     $("#historyTable").append(`<tr><td>${element.i}</td><td>${element.d}cm</td><td>${element.v}m<sup>3</sup></td></tr>`);
-   }
+    for (const element of json.data) {
+      $("#historyTable").append(`
+       <tr>
+          <td>${element.i}</td>
+          <td>${element.d}cm</td>
+          <td>${element.v}m<sup>3</sup></td>
+       </tr>
+      `);
+    }
   }
 
-	function updateInfo(json) {
+  function updateInfo(json) {
     $("#infoTable tr").remove();
     for (var key in json.info) {
       $("#infoTable").append(`<tr><td>${key}</td><td>${json.info[key]}</td></tr>`);
@@ -96,8 +103,8 @@ $(function() {
   }
 
   function refreshTimer() {
-      $("#timer").text(Math.floor(-1 * (Date.now() - timer - dataInterval) / 1000));
-      setTimeout(refreshTimer, 1000);
+    $("#timer").text(Math.floor(-1 * (Date.now() - timer - dataInterval) / 1000));
+    setTimeout(refreshTimer, 1000);
   }
 
   function refreshData() {
@@ -108,21 +115,21 @@ $(function() {
       linktimeout: 2000
     }).done(function(json) {
       timer = Date.now();
-			if (!json || !json.info || !json.data) {
-				alert('Received broken data, will retry.', 'warning')
-				dataInterval = 5 * 1000;
-				return
-			}
+      if (!json || !json.info || !json.data) {
+        alert('Received broken data, will retry.', 'warning')
+        dataInterval = 5 * 1000;
+        return
+      }
       populateForm(json);
       updateTank(json);
-			updateInfo(json);
+      updateInfo(json);
       updateHistory(json);
-			$("#liveAlertPlaceholder div.alert-warning").remove();
-			dataInterval = 60 * 1000;
+      $("#liveAlertPlaceholder div.alert-warning").remove();
+      dataInterval = 60 * 1000;
     }).fail(function(xhr, status, errorThrown) {
       timer = Date.now();
-			alert('Lost connection, retrying....', 'warning')
-			dataInterval = 5 * 1000;
+      alert('Lost connection, retrying....', 'warning')
+      dataInterval = 5 * 1000;
       console.log("Error: " + errorThrown);
       console.log("Status: " + status);
       console.dir(xhr);
