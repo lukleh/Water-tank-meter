@@ -11,7 +11,7 @@
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
 
-#define FIRMWARE_VERSION 1.6 // firmware version
+#define FIRMWARE_VERSION 1.7 // firmware version
 #define ULTRASOUND_ECHOPIN 13 // D7 blue  Pin to receive echo pulse TX
 #define ULTRASOUND_TRIGPIN 12 // D6 green Pin to send trigger pulse RX
 #define MEASUREMENT_COUNT 168
@@ -170,7 +170,7 @@ void handleData(AsyncWebServerRequest *request) {
     measurement["i"] = i;
     measurement["p"] = calcPercentFullCapped(calcPercentFull(measurements[i]));
     measurement["v"] = round(waterVolumeM3(measurements[i]) * 1000) / 1000.0;
-    measurement["d"] = round(measurements[i] * 10) / 10.0;
+    measurement["d"] = round(remainingDepth(measurements[i]) * 10) / 10.0;
   }
   response->setLength();
   request->send(response);
