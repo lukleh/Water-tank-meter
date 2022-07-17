@@ -11,7 +11,7 @@
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
 
-#define FIRMWARE_VERSION 1.7 // firmware version
+#define FIRMWARE_VERSION 1.8 // firmware version
 #define ULTRASOUND_ECHOPIN 13 // D7 blue  Pin to receive echo pulse TX
 #define ULTRASOUND_TRIGPIN 12 // D6 green Pin to send trigger pulse RX
 #define MEASUREMENT_COUNT 168
@@ -301,7 +301,7 @@ void connectWifi() {
     Serial.println("WiFi failed, switching to AP");
     break;
   }
-  
+
   if (WiFi.status() != WL_CONNECTED) {
     makeSoftAP();
     return;
@@ -312,14 +312,15 @@ void checkWifi() {
   /*
      if in AP mode, and last WIFI connection was successful, try to reconnect
   */
-  if (wifi_get_opmode() == 2 && haveWifiCredentials()) {
-    if (getNow() - lastWificheck > 300000) {
+  if (getNow() - lastWificheck > 300000) {
+    lastWificheck = getNow();
+    if (wifi_get_opmode() == 2 && haveWifiCredentials()) {
       Serial.println("Trying to reconnect to the last known WIFI network");
-      lastWificheck = getNow();
       connectWifi();
     }
   }
 }
+
 
 void flashInfo() {
   uint32_t realSize = ESP.getFlashChipRealSize();
