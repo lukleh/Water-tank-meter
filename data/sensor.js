@@ -112,7 +112,7 @@ $(function() {
       url: "/data",
       type: "GET",
       dataType: "json",
-      linktimeout: 2000
+      timeout: 5000
     }).done(function(json) {
       timer = Date.now();
       if (!json || !json.info || !json.data) {
