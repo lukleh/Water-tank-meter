@@ -1,0 +1,136 @@
+esphome:
+  name: studna
+  friendly_name: "Senzor studny"
+  area: zahrada
+
+esp8266:
+  board: d1_mini_pro
+  restore_from_flash: true
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap: {}
+
+captive_portal:
+
+web_server:
+  port: 80
+  version: 3
+  log: true
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Prague
+    on_time_sync:
+      then:
+        - logger.log: "Synchronized system clock"
+
+text_sensor:
+  - platform: template
+    id: show_time
+    name: "Cas"
+    web_server_sorting_weight: 2
+
+sensor:
+  - platform: ultrasonic
+    trigger_pin: D7
+    echo_pin: D6
+    name: "Vzdalenost od hladiny ted"
+    id: vzdalenost
+    unit_of_measurement: "cm"
+    update_interval: 1s
+    filters:
+      - lambda: return x * 100;
+    web_server_sorting_weight: 49
+
+  - platform: copy
+    source_id: vzdalenost
+    name: "Vzdalenost od hladiny prumer"
+    id: vzdalenost_prumer
+    unit_of_measurement: "cm"
+    accuracy_decimals: 0
+    filters:
+      - sliding_window_moving_average:
+          window_size: 10
+          send_every: 1
+      - filter_out: nan
+      - lambda: return round(x);
+    web_server_sorting_weight: 10
+
+  - platform: copy
+    source_id: vzdalenost_prumer
+    name: "Objem vody"
+    icon: "mdi:water"
+    unit_of_measurement: "l"
+    accuracy_decimals: 0
+    filters:
+      - sliding_window_moving_average:
+          window_size: 30
+          send_every: 10
+      - filter_out: nan
+      - lambda: return round((3.14 * (id(prumer).state / 2.0) * (id(prumer).state / 2.0) * (id(hloubka).state - x)) / 1000) ;
+    web_server_sorting_weight: 5
+
+
+  - platform: wifi_signal
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 10s
+    entity_category: "diagnostic"
+    web_server_sorting_weight: 32
+
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+    device_class: ""
+    web_server_sorting_weight: 34
+    
+number:
+  - platform: template
+    name: "Vzdalenost ode dna"
+    id: hloubka
+    optimistic: true
+    min_value: 1
+    max_value: 300
+    initial_value: 200
+    step: 1
+    restore_value: true
+    mode: box
+    device_class: distance
+    web_server_sorting_weight: 20
+  - platform: template
+    name: "Prumer studny"
+    id: prumer
+    optimistic: true
+    min_value: 1
+    max_value: 200
+    initial_value: 150
+    step: 1
+    restore_value: true
+    mode: box
+    device_class: distance
+    web_server_sorting_weight: 30
+
+button:
+  - platform: restart
+    name: "Studna Restart"
+    web_server_sorting_weight: 40
+
+
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          auto time = id(sntp_time).now();
+          char strftime_buf[64];
+          time.strftime(strftime_buf, sizeof(strftime_buf), "%Y-%m-%d %H:%M:%S");
+          id(show_time).publish_state(strftime_buf);
