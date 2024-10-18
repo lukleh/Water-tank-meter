@@ -7,6 +7,7 @@ You need to install [ESPHome](https://esphome.io/)
 ```
 esphome run studna.yaml
 ```
+Use silicone to seal the box.
 
 ## Hardware
 * [WeMos D1 Mini Pro 16MB ESP8266 WiFi modul](https://www.laskakit.cz/wemos-d1-mini-pro--esp8266-wifi-modul/)
