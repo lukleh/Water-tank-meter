@@ -14,6 +14,9 @@ wifi:
   password: !secret wifi_password
   ap: {}
 
+ota:
+  platform: esphome
+
 captive_portal:
 
 web_server:
@@ -33,7 +36,8 @@ text_sensor:
   - platform: template
     id: show_time
     name: "Cas"
-    web_server_sorting_weight: 2
+    web_server:
+      sorting_weight: 2
 
 sensor:
   - platform: ultrasonic
@@ -45,7 +49,8 @@ sensor:
     update_interval: 1s
     filters:
       - lambda: return x * 100;
-    web_server_sorting_weight: 49
+    web_server:
+      sorting_weight: 49
 
   - platform: copy
     source_id: vzdalenost
@@ -59,7 +64,8 @@ sensor:
           send_every: 1
       - filter_out: nan
       - lambda: return round(x);
-    web_server_sorting_weight: 10
+    web_server:
+      sorting_weight: 10
 
   - platform: copy
     source_id: vzdalenost_prumer
@@ -73,7 +79,8 @@ sensor:
           send_every: 10
       - filter_out: nan
       - lambda: return round((3.14 * (id(prumer).state / 2.0) * (id(prumer).state / 2.0) * (id(hloubka).state - x)) / 1000) ;
-    web_server_sorting_weight: 5
+    web_server:
+      sorting_weight: 5
 
 
   - platform: wifi_signal
@@ -81,7 +88,8 @@ sensor:
     id: wifi_signal_db
     update_interval: 10s
     entity_category: "diagnostic"
-    web_server_sorting_weight: 32
+    web_server:
+      sorting_weight: 32
 
   - platform: copy
     source_id: wifi_signal_db
@@ -91,7 +99,8 @@ sensor:
     unit_of_measurement: "Signal %"
     entity_category: "diagnostic"
     device_class: ""
-    web_server_sorting_weight: 34
+    web_server:
+      sorting_weight: 34
     
 number:
   - platform: template
@@ -105,7 +114,9 @@ number:
     restore_value: true
     mode: box
     device_class: distance
-    web_server_sorting_weight: 20
+    web_server:
+      sorting_weight: 20
+
   - platform: template
     name: "Prumer studny"
     id: prumer
@@ -117,12 +128,14 @@ number:
     restore_value: true
     mode: box
     device_class: distance
-    web_server_sorting_weight: 30
+    web_server:
+      sorting_weight: 30
 
 button:
   - platform: restart
     name: "Studna Restart"
-    web_server_sorting_weight: 40
+    web_server:
+      sorting_weight: 40
 
 
 
