@@ -8,6 +8,7 @@ esp8266:
   restore_from_flash: true
 
 logger:
+  level: INFO
 
 wifi:
   ssid: !secret wifi_ssid
@@ -70,6 +71,7 @@ sensor:
   - platform: copy
     source_id: vzdalenost_prumer
     name: "Objem vody"
+    id: objem_vody
     icon: "mdi:water"
     unit_of_measurement: "l"
     accuracy_decimals: 0
@@ -131,19 +133,55 @@ number:
     web_server:
       sorting_weight: 30
 
+  - platform: template
+    name: "Log Level"
+    id: log_level
+    optimistic: true
+    min_value: 0
+    max_value: 3
+    step: 1
+    initial_value: 1  # Start at 'Errors only'
+    restore_value: true
+    web_server:
+      sorting_weight: 60
+    mode: slider
+    unit_of_measurement: "Level"
+    on_value:
+      then:
+        - lambda: |-
+            int logLevel = int(id(log_level).state);
+            ESP_LOGI("custom", "Log level changed to %d", logLevel);
+
 button:
   - platform: restart
     name: "Studna Restart"
     web_server:
       sorting_weight: 40
 
-
-
 interval:
   - interval: 1s
     then:
       - lambda: |-
+          // Log level meanings:
+          // 0 = Silent
+          // 1 = Errors only
+          // 2 = Normal (Info)
+          // 3 = Verbose / Debug
+
+          // Read log level state
+          int logLevel = int(id(log_level).state);
+          
           auto time = id(sntp_time).now();
           char strftime_buf[64];
           time.strftime(strftime_buf, sizeof(strftime_buf), "%Y-%m-%d %H:%M:%S");
           id(show_time).publish_state(strftime_buf);
+
+          // Only execute if log level is normal or verbose
+          if (logLevel == 3) {
+            ESP_LOGI("custom", "Verbose: Time updated to %s", strftime_buf);
+            // Log all sensors manually at verbose level
+            ESP_LOGI("custom", "Sensor - Vzdalenost ted: %.2f cm", id(vzdalenost).state);
+            ESP_LOGI("custom", "Sensor - Vzdalenost prumer: %.2f cm", id(vzdalenost_prumer).state);
+            ESP_LOGI("custom", "Sensor - WiFi Signal dB: %.2f dB", id(wifi_signal_db).state);
+            ESP_LOGI("custom", "Sensor - Objem vody: %.2f l", id(objem_vody).state);
+          }
