@@ -40,6 +40,13 @@ text_sensor:
     web_server:
       sorting_weight: 2
 
+  - platform: wifi_info
+    ip_address:
+      name: "WiFi IP Address"
+      id: wifi_ip
+      web_server:
+        sorting_weight: 70
+
 sensor:
   - platform: ultrasonic
     trigger_pin: D7
